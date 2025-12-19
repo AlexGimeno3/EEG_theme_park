@@ -77,6 +77,8 @@ class PlaygroundMode(Mode):
             self._menubar.add_cascade(label="View", menu=view_menu)
             view_menu.add_command(label="View time series", command=self.view_ts_cmd)
             view_menu.add_command(label="Zoom time series", command=self.zoom_cmd)
+            view_menu.add_command(label="View flags", command=self.view_flags_cmd)
+            view_menu.add_command(label="View signal data", command=self.view_signal_info_cmd)
 
     def show(self):
         self._create_menubar()
@@ -91,6 +93,67 @@ class PlaygroundMode(Mode):
             self._update_display(time_series)
 
     #Utility functions ------------------
+    def view_signal_info_cmd(self):
+        """Display signal information in a formatted dialog."""
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue("You need to build or import a signal before you can view its information.")
+            return
+        
+        # Format datetime if it exists
+        datetime_str = "Not recorded"
+        if hasattr(self.current_signal, 'datetime_collected') and self.current_signal.datetime_collected:
+            try:
+                datetime_str = self.current_signal.datetime_collected.strftime("%Y-%m-%d %H:%M:%S")
+            except (AttributeError, ValueError):
+                datetime_str = str(self.current_signal.datetime_collected)
+        
+        # Build the information message
+        info_lines = [
+            "Signal Information:",
+            "",
+            f"Name: {self.current_signal.name}",
+            f"Start Time: {self.current_signal.start_time:.3f} ms",
+            f"Datetime Collected: {datetime_str}",
+            f"Sampling Rate: {self.current_signal.srate} Hz",
+            "",
+            "Log:",
+            "─" * 50
+        ]
+        
+        # Add log entries
+        if hasattr(self.current_signal, 'log') and self.current_signal.log:
+            info_lines.extend(self.current_signal.log)
+        else:
+            info_lines.append("No log entries.")
+        
+        message = "\n".join(info_lines)
+        gui_utilities.simple_dialogue(message)
+    
+    def view_flags_cmd(self):
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue("You need to build or import a signal before you can make changes to it.")
+            return
+        # Format flags dictionary nicely
+        if not self.current_signal.flags:
+            gui_utilities.simple_dialogue("No flags have been set for this signal.")
+            return
+        
+        # Build formatted message
+        message_lines = ["Signal Flags:\n"]
+        for flag_name, flag_values in self.current_signal.flags.items():
+            times_sec = [t for t in flag_values[:2]]
+            
+            if len(flag_values) == 1:
+                # Single time point
+                message_lines.append(f"  • {flag_name}: {times_sec[0]:.3f} s")
+            elif len(flag_values) == 3:
+                # Time range with shading option
+                shade_text = " (shaded)" if flag_values[2] else ""
+                message_lines.append(f"  • {flag_name}: {times_sec[0]:.3f} s - {times_sec[1]:.3f} s{shade_text}")
+        
+        message = "\n".join(message_lines)
+        gui_utilities.simple_dialogue(message)
+    
     def zoom_cmd(self):
         if self.current_signal is None:
             gui_utilities.simple_dialogue("You need to build or import a signal before you can make changes to it.")
@@ -745,16 +808,18 @@ class PlaygroundMode(Mode):
             global_max_time = min(global_max_time, end_time)
 
         # Helper function to downsample data intelligently
-        def downsample_data(times, data, max_points=5000):
+        def downsample_data(times, data, max_points=500):
             """
             Downsample data if it exceeds max_points while preserving visual features.
             Uses a min-max decimation approach to preserve peaks and troughs.
             """
             if len(data) <= max_points:
+                print(f"Skipping downsample - already small enough: {len(data)} points.")
                 return times, data
             
             # Calculate decimation factor
-            factor = len(data) // max_points // 2
+            factor = max(1, len(data) // (max_points // 2))
+            print(f"Downsample factor: {factor}")
             
             # Decimate by taking min/max pairs in each window to preserve features
             downsampled_times = []
@@ -778,6 +843,7 @@ class PlaygroundMode(Mode):
                         downsampled_times.extend([window_times[max_idx], window_times[min_idx]])
                         downsampled_data.extend([window_data[max_idx], window_data[min_idx]])
             
+            print(f"Output length: {len(downsampled_data)}")
             return downsampled_times, downsampled_data
         
         # Filter data based on time_lims

@@ -16,7 +16,8 @@ class EEGSignal:
         - signal_specs (dict): a dictionary containing the following keys: "srate", "data", "start_time", "flags", "log"
         """
         self.name = signal_specs.get("name","unnamed")
-        self.data = signal_specs["data"]
+        self.channel = signal_specs["channel"]
+        self.data = np.asarray(signal_specs["data"])
         self.original_data = copy.deepcopy(self.data) #Initial data in case the user ever wants to compare after filtering, noising, etc
         self.start_time = signal_specs["start_time"]
         self.datetime_collected = signal_specs.get("datetime_collected", dt.datetime(2000, 1, 1, 0, 0, 0)) #Actual time that the recording began
@@ -97,14 +98,13 @@ class EEGSignal:
         
         # Convert dt.datetime to signal-relative time
         if isinstance(time_value, dt.datetime):
-            time_epoch = time_value.timestamp()
-            recording_epoch = self.datetime_collected.timestamp()
+            standardized_time = time_value.timestamp()
+            standardized_start_time = self.datetime_collected.timestamp()
             
             # Calculate offset from recording start
-            offset_seconds = time_epoch - recording_epoch
+            offset_seconds = standardized_time - standardized_start_time
             
-            # Add to self.start_time (in case signal doesn't start at 0)
-            return self.start_time + offset_seconds
+            return offset_seconds - self.start_time #self.start_time represents the first time value in the signal relative to when to recording was started. If it equals 5, therefore, the signal begins 5 seconds after the recording was first taken. Therefore, incorporating this substraction ensures that our offset (from beginning of the recording) is corrected in those cases where some trimming has occurred. As a concrete example, imagine a signal recorded at 14:00:00, but cropped to 14:00:10 and with an event at 14:00:15. offset_seconds would be 15 (since the event happened 15 secs after the recording started); however, the event is only 5 seconds into the actual signal (which started at 14:00:10, and therefore has a start_time of 10 secs). 15-10 = 5 seconds, accurately reflecting the number of seconds from the signal start where we see our event. 
         
         raise TypeError(
             f"Flag time must be numeric (float/int) or datetime object (dt.time/dt.datetime), got {type(time_value).__name__}: {time_value}")

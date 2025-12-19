@@ -3,11 +3,13 @@ Interface-based module containing various loaders for EEG files of different for
 """
 from abc import ABC, abstractmethod
 from pathlib import Path
+import re
+import datetime as dt
 from eeg_theme_park.utils.eeg_signal import EEGSignal
 import pickle as pkl
 import mne
 from mne._fiff import utils
-from eeg_theme_park.utils.gui_utilities import choose_channel
+from eeg_theme_park.utils.gui_utilities import choose_channel, yes_no
 from eeg_theme_park.utils.misc_utils import get_datetime_from_excel
 
 class EEGLoader(ABC):
@@ -122,7 +124,9 @@ class BDFLoader(EEGLoader):
             data = raw.get_data(picks="eeg")
             data = data[channel_i, :]
             start_time = raw.first_time
+            channel_name = channel
             eeg_specs = {
+                "channel":channel_name,
                 "srate":srate,
                 "data":data,
                 "start_time":start_time,
@@ -154,36 +158,21 @@ class BDFLoader(EEGLoader):
 
 class DettiEDFLoader(EEGLoader):
     def add_flags(self, eeg_signal_obj):
-        """
-        Helper function that finds and extracts seizure (flag) data from auxiliary .txt files to be added to the signal later on.
-        Inputs:
-        - eeg_signal_obj (EEGSignal subclass): Detti EDF eeg_signal_object we will be finding flags for
-        Outputs:
-        None. However, adds all seizure data to the EEGSignal object as flags.
-        """
-        import re
-        from pathlib import Path
-        import datetime as dt
         
         search_name = eeg_signal_obj.name
         
-        # Find the .txt file starting from project root
+        # Find the .txt file
         project_root = Path(__file__).parent.parent
         txt_files = list(project_root.rglob(f"{search_name}.txt"))
-        
         if not txt_files:
-            # No annotation file found - this is normal, just return
             return
-        
         if len(txt_files) > 1:
             raise ValueError(f"Multiple .txt files found for {search_name}: {txt_files}")
-        
         txt_file = txt_files[0]
-        
         with open(txt_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Helper to parse time strings (handles both "HH.MM.SS" and "HH:MM:SS")
+        # Helper to parse time strings
         def parse_time_str(time_str):
             time_str = time_str.strip().replace('.', ':')
             parts = time_str.split(':')
@@ -192,27 +181,30 @@ class DettiEDFLoader(EEGLoader):
             hours, minutes, seconds = map(int, parts)
             return dt.time(hours, minutes, seconds)
         
-        # Extract and verify registration start time
+        # Extract registration start time from .txt (ground truth)
         reg_start_match = re.search(r'Registration start time:\s*([0-9:.]+)', content)
         if not reg_start_match:
             raise ValueError(f"Could not find registration start time in {txt_file}")
         
         reg_start_time = parse_time_str(reg_start_match.group(1))
-        eeg_start_time = eeg_signal_obj.datetime_collected.time()
         
-        if reg_start_time != eeg_start_time:
+        # Verify signal hasn't been cropped
+        if eeg_signal_obj.start_time != 0:
             raise ValueError(
-                f"Registration start time in .txt ({reg_start_time}) does not match "
-                f"EEG datetime_collected ({eeg_start_time})"
-            )
+                f"Signal has been cropped (start_time = {eeg_signal_obj.start_time}). "
+                f"Cannot reliably align with .txt annotations.")
+        
+        # Override datetime_collected to match .txt ground truth (use arbitrary date, timezone-naive)
+        eeg_signal_obj.datetime_collected = dt.datetime.combine(
+            dt.date(2000, 1, 1),  # Arbitrary date
+            reg_start_time
+        )
         
         # Verify recording is <24 hours (otherwise hours repeat and are ambiguous)
         recording_duration_hours = len(eeg_signal_obj.data) / eeg_signal_obj.srate / 3600
         if recording_duration_hours >= 24:
             raise ValueError(
-                f"Recording duration ({recording_duration_hours:.2f} hours) >= 24 hours. "
-                "Cannot unambiguously determine seizure dates from time-only annotations."
-            )
+                f"Recording duration ({recording_duration_hours:.2f} hours) >= 24 hours. Cannot unambiguously determine seizure dates from time-only annotations.")
         
         # Find all seizure blocks
         seizure_pattern = r'Seizure n \d+.*?(?=Seizure n \d+|$)'
@@ -296,54 +288,52 @@ class DettiEDFLoader(EEGLoader):
         file_name = file_path.stem
         if not extension in self.get_supported_extensions():
             pass
-        else:
-            # Temporarily rename file to .edf for MNE compatibility
-            temp_path = file_path.with_suffix('.edf')
-            file_path.rename(temp_path)
+        else:            
+            raw = mne.io.read_raw_edf(file_path, preload=False, verbose=False)
+            srate = raw.info['sfreq']
+            channel_names = [name.upper() for name in raw.ch_names]
+            if (channel is None) or (not channel in channel_names):
+                channel, channel_i = choose_channel(channel_names)
+            else:
+                channel_i = channel_names.index(channel)
+
+            #Load the data
+            original_channel_name = raw.ch_names[channel_i]
+            data = raw.get_data(picks=[original_channel_name]) * 1e6
+            data = data[0, :]  # Extract the single channel (now it's the first row)
+
+            start_time = raw.first_time
+            recording_start = raw.info['meas_date']
+            eeg_specs = {
+                "name":file_name,
+                "srate":srate,
+                "data":data,
+                "start_time":start_time,
+                "datetime_collected":recording_start,
+                "flags":{},
+                "log":""
+            }
+            eeg_signal_obj = EEGSignal(**eeg_specs)
             
-            try:
-                raw = mne.io.read_raw_edf(temp_path, preload=False, verbose=False)
-                srate = raw.info['sfreq']
-                channel_names = [name.upper() for name in raw.ch_names]
-                print(channel_names)
-                if (channel is None) or (not channel in channel_names):
-                    channel, channel_i = choose_channel(channel_names)
-                data = raw.get_data(picks="eeg")*1e6
-                data = data[channel_i, :]
-                start_time = raw.first_time
-                recording_start = raw.info['meas_date']
-                eeg_specs = {
-                    "name":file_name,
-                    "srate":srate,
-                    "data":data,
-                    "start_time":start_time,
-                    "datetime_collected":recording_start,
-                    "flags":{},
-                    "log":""
-                }
-                eeg_signal_obj = EEGSignal(**eeg_specs)
+            for i in range(len(raw.annotations)):
+                name = raw.annotations.description[i]
+                onset = raw.annotations.onset[i]
+                duration = raw.annotations.duration[i]
                 
-                for i in range(len(raw.annotations)):
-                    name = raw.annotations.description[i]
-                    onset = raw.annotations.onset[i]
-                    duration = raw.annotations.duration[i]
-                    
-                    if duration == 0:
-                        times = [onset]
-                    else:
-                        times = [onset, onset + duration]
-                    
-                    eeg_signal_obj.add_flag(name, times)
+                if duration == 0:
+                    times = [onset]
+                else:
+                    times = [onset, onset + duration]
                 
+                eeg_signal_obj.add_flag(name, times)
+            
+            detti_bool = yes_no("Are these files from Detti et al.?")
+            if detti_bool:
                 self.add_flags(eeg_signal_obj)
-                
-            finally:
-                # Always rename back to original extension, even if an error occurred
-                temp_path.rename(file_path)
             
             return (eeg_signal_obj, file_path)
     
     @staticmethod #To allow for class calling without an instance when determining whether or not this loader is appropriate for the given file
     def get_supported_extensions():
-        return [".detti_edf"]
+        return [".edf"]
 
