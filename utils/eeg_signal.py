@@ -19,7 +19,7 @@ class EEGSignal:
         self.data = signal_specs["data"]
         self.original_data = copy.deepcopy(self.data) #Initial data in case the user ever wants to compare after filtering, noising, etc
         self.start_time = signal_specs["start_time"]
-        self.time_collected = signal_specs.get("real_world_start_time", ) #Actual time that the recording began
+        self.time_collected = signal_specs.get("real_world_start_time", dt.datetime(2000, 1, 1, 0, 0, 0)) #Actual time that the recording began
         self.srate = signal_specs["srate"]
         self.end_time = self.start_time+len(self.data)/self.srate #In the edge case of one data point starting at t=0 sampled at 100 Hz, this means the signal start time is 0, the length is 1, and the end time is 0.01; this has been handled in the subsequent line of code 
         self.times = np.linspace(start=self.start_time, stop=self.end_time, num=len(self.data), endpoint=False) #Assuming a sampling rate of f, each delta-t is 1/f. self.end_time includes the time in the delta-t after the last data point collected at t. However, with linspace, this would cause incorrect time-marking creation, since the last data point would be assumed to be collected at self.end_time = t + delta-t when really it is just collected at t. Since the total recording length is always one delta-t above the total time that we are sampling, we use endpoint = False to eliminate this last delta-t
