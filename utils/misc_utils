@@ -1,0 +1,9 @@
+def get_start_time_from_excel(excel_path, ):
+    """
+    Function whose goal it is to return an EEG's start time from an auxiliary Excel file.
+
+    Inputs:
+    - excel_path (Path object): path to the Excel sheet containing start time data
+    - column_name (str): name of the column containing the start time of the EEG signal
+    """
+    
