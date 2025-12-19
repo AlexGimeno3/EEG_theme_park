@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eeg-theme-park"
+version = "0.1.0"
+description = "EEG signal analysis and processing toolkit"
+readme = "README.md"
+requires-python = ">=3.7.12"
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "mne",
+    "scipy",
+    "openpyxl",
+    "tqdm"
+]
+
+[project.scripts]
+eeg-theme-park = "eeg_theme_park.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["eeg_theme_park*"]

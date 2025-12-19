@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "EEG Theme Park (Module)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "eeg_theme_park",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/.."
+        },
+        {
+            "name": "EEG Theme Park (Direct)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/__main__.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
