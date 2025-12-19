@@ -192,19 +192,4 @@ class EdgeFrequency(EEGAnalyzer):
                 }
             sef = main_spectral(window_signal, srate, "spectral_edge_frequency", pass_params)
             return sef
-
-            freq_low = 8
-            freq_high = 10
-            fft_values = np.fft.fft(window_signal)
-            fft_freqs = np.fft.fftfreq(len(window_signal), 1/srate)
-            # Get positive frequencies only
-            pos_mask = fft_freqs >= 0
-            fft_freqs = fft_freqs[pos_mask]
-            fft_values = fft_values[pos_mask]
-            # Find indices in frequency band
-            freq_mask = (fft_freqs >= freq_low) & (fft_freqs <= freq_high)
-            # Compute power (magnitude squared, normalized)
-            power_spectrum = np.abs(fft_values) ** 2 / len(window_signal)
-            band_power = np.sum(power_spectrum[freq_mask])
-            return band_power
             #----------------------

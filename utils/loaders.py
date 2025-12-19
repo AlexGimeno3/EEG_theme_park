@@ -175,8 +175,15 @@ class DettiEDFLoader(EEGLoader):
         Helper function that finds and extracts seizure (flag) data from auxiliary .txt files to be added to the signal later on.
 
         Inputs:
-        eeg_signal_obj (EEGSignal subclass): Detti EDF eeg_signal_object we will be finding flags for.
+        - eeg_signal_obj (EEGSignal subclass): Detti EDF eeg_signal_object we will be finding flags for.
+
+        Outputs:
+        None. However, adds all seizure data to the EEGSignal object as flags.
         """
+        search_name = eeg_signal_obj.name #file name (as defined below)
+        return
+
+
 
     
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
@@ -201,13 +208,13 @@ class DettiEDFLoader(EEGLoader):
             data = raw.get_data(picks="eeg")
             data = data[channel_i, :]
             start_time = raw.first_time
-            recording_start = 
+            recording_start = raw.info['meas_date']
             eeg_specs = {
-                "name":file_name
+                "name":file_name,
                 "srate":srate,
                 "data":data,
                 "start_time":start_time,
-                "real_world_start_time":recording_start
+                "datetime_collected":recording_start,
                 "flags":{},
                 "log":""
             }
