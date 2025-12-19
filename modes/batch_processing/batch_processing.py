@@ -31,6 +31,8 @@ class BatchProcessing(Mode):
         self.events_excel_path = kwargs.get("excel_path", None)
         self.excel_path = self.events_excel_path
         self.event_names = kwargs.get("event_names", None)
+        self.use_existing_flags = False  # Track if we're using flags from files vs Excel
+        self.existing_flag_names = None  # Store flag names to look for in files
         self.pipeline = None
         self.results_df = None
         self.errors_df = None
@@ -133,15 +135,67 @@ class BatchProcessing(Mode):
 
     def _choose_events_command(self):
         """Command handler for Choose Events button"""
-        self.excel_path = verify_excel_path(excel_path=None)
-        if self.excel_path is not None:
-            self.event_names = select_flag_names(self.excel_path)
-            if self.event_names is not None:
-                self.events_label.config(text=f"Events: {', '.join(self.event_names)}")
+        # Ask user which method they want to use
+        choice = gui_utilities.yes_no(
+            "How would you like to specify events?\n\n"
+            "Yes: Use Excel file with event times\n"
+            "No: Use existing flags in EEG files"
+        )
+        
+        if choice:  # Excel file
+            self.use_existing_flags = False
+            self.existing_flag_names = None
+            self.excel_path = verify_excel_path(excel_path=None)
+            if self.excel_path is not None:
+                self.event_names = select_flag_names(self.excel_path)
+                if self.event_names is not None:
+                    self.events_label.config(text=f"Events from Excel: {', '.join(self.event_names)}")
+                else:
+                    self.events_label.config(text="No events selected - will analyze entire signals")
             else:
-                self.events_label.config(text="No events selected - will analyze entire signals")
-        else:
-            self.events_label.config(text="No Excel file selected - will analyze entire signals")
+                self.events_label.config(text="No Excel file selected - will analyze entire signals")
+        else:  # Existing flags
+            self.use_existing_flags = True
+            self.excel_path = None
+            self.event_names = None
+            
+            # Prompt user to enter flag name(s)
+            available_flags = []
+            if self.files_dir is not None and hasattr(self, 'names_list') and len(self.names_list) > 0:
+                try:
+                    first_file = self.names_list[0]
+                    eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True)[0]
+                    # Extract unique flag names from the flags dictionary
+                    if hasattr(eeg_signal, 'flags') and eeg_signal.flags:
+                        available_flags = list(set(flag_data[0] for flag_data in eeg_signal.flags.values()))
+                except Exception as e:
+                    print(f"Could not load flags from first file: {e}")
+            
+            # Show dropdown or text entry based on whether we found flags
+            if available_flags:
+                flag_input = gui_utilities.dropdown_menu(
+                    "Select the flag(s) to analyze:",
+                    available_flags,
+                    multiple=True
+                )
+                # Convert list selection to comma-separated string if needed
+                if isinstance(flag_input, list):
+                    flag_input = ', '.join(flag_input)
+            else:
+                flag_input = gui_utilities.text_entry(
+                    "Enter the name of the flag to analyze.\n"
+                    "For multiple flags, separate with commas (e.g., 'Seizure, Spike'):"
+                )
+            
+            if flag_input:
+                # Parse comma-separated flag names
+                self.existing_flag_names = [name.strip() for name in flag_input.split(',')]
+                self.events_label.config(
+                    text=f"Using existing flags: {', '.join(self.existing_flag_names)}"
+                )
+            else:
+                self.existing_flag_names = None
+                self.events_label.config(text="No flags selected - will analyze entire signals")
 
     def _import_pipeline_command(self):
         """Command handler for Import Pipeline button"""
@@ -183,28 +237,62 @@ class BatchProcessing(Mode):
         self.analysis_log += error_log_text
         self.names_list = [self.files_dir/Path(name) for name in names_list]
     
-    def run_analysis(self, flag_times = None, save_pipeline=True):
+    def run_analysis(self, flag_times=None, save_pipeline=True):
         """
-        Method that runs our analysis. Specifically, 
+        Method that runs our analysis.
         - save_pipeline (bool): If True, we will save a pickled Pipeline object to the same directory where we save the Excel
         """
-        #Step 1: Get our pipeline
+        # Step 1: Get our pipeline
         if self.pipeline is None:
             self.pipeline = build_pipeline()
-        #Step 2: Initialize our results and error excels
-        self.initialize_excel() #Initialize Excel based on pipeline's columns
-        #Step 3: Load our files one-by-one (to save memory overhead) and runs our pipeline, saving as we go
+        
+        # Step 2: Initialize our results and error excels
+        self.initialize_excel()
+        
+        # Step 3: Load our files one-by-one and run pipeline
+        channel_name = None
         for path in self.names_list:
-            eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool = True)[0]
+            eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=channel_name)[0]
             id = eeg_signal.name
-            #Add flag information
-            if not flag_times is None:
-                flag_times = get_flag_times(self.excel_path, id, self.event_names) #2-item arr of dt.time object representing the times between which the event occurred.
-                flag_times = eeg_signal.get_real_time_window(flag_times)
-                eeg_signal.add_flag("Analyzed event", flag_times,shade=True)
-                eeg_signal.analyze_time_limits = flag_times #Sets our analysis limits
+            if not eeg_signal.channel is None:
+                channel_name = eeg_signal.channel
 
-            dicts_arr, error_message = self.pipeline.run_pipeline(eeg_signal) #Array, where each entry is a dictionary with the keys and results
+            # Add flag information based on mode
+            if self.use_existing_flags and self.existing_flag_names is not None:
+                for flag_name in self.existing_flag_names:
+                    # Normalize flag name (capitalize first letter)
+                    normalized_name = flag_name[0].upper() + flag_name[1:] if flag_name else flag_name
+                    
+                    # Check if flag exists in the signal
+                    if normalized_name in eeg_signal.flags:
+                        flag_data = eeg_signal.flags[normalized_name]
+                        
+                        # Handle both single-point and duration flags
+                        if len(flag_data) >= 2:
+                            # Duration flag (has start and end times)
+                            flag_times = flag_data[:2]
+                            eeg_signal.analyze_time_limits = flag_times
+                        else:
+                            # Single-point flag - log warning and skip
+                            error_msg = f"Flag '{normalized_name}' is a single-point flag, cannot set analysis limits"
+                            self.analysis_log += f"[{id}] {error_msg}\n"
+                            continue
+                    else:
+                        # Flag not found - log error and skip this file
+                        error_msg = f"Flag '{normalized_name}' not found in signal. Available flags: {list(eeg_signal.flags.keys())}"
+                        error_row = {'ID': id, 'Error_name': error_msg}
+                        self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
+                        self.analysis_log += f"[{id}] {error_msg}\n"
+                        continue
+                        
+            elif self.excel_path is not None and self.event_names is not None:
+                flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                flag_times = eeg_signal.get_real_time_window(flag_times)
+                eeg_signal.add_flag("Analyzed event", flag_times, shade=True)
+                eeg_signal.analyze_time_limits = flag_times
+            
+            # Run the pipeline
+            dicts_arr, error_message = self.pipeline.run_pipeline(eeg_signal)
             if dicts_arr is not None:
                 # Transform the array of dicts into a single row
                 row_data = {'ID': id}
