@@ -8,7 +8,7 @@ import pickle as pkl
 import mne
 from mne._fiff import utils
 from eeg_theme_park.utils.gui_utilities import choose_channel
-from eeg_theme_park.utils.misc_utils import get_start_time_from_excel
+from eeg_theme_park.utils.misc_utils import get_datetime_from_excel
 
 
 # Create the permissive read function
@@ -170,21 +170,18 @@ class BDFLoader(EEGLoader):
     
 
 class DettiEDFLoader(EEGLoader):
-    def add_flags(eeg_signal_obj):
-        """
-        Helper function that finds and extracts seizure (flag) data from auxiliary .txt files to be added to the signal later on.
+    # def add_flags(eeg_signal_obj):
+    #     """
+    #     Helper function that finds and extracts seizure (flag) data from auxiliary .txt files to be added to the signal later on.
 
-        Inputs:
-        - eeg_signal_obj (EEGSignal subclass): Detti EDF eeg_signal_object we will be finding flags for.
+    #     Inputs:
+    #     - eeg_signal_obj (EEGSignal subclass): Detti EDF eeg_signal_object we will be finding flags for.
 
-        Outputs:
-        None. However, adds all seizure data to the EEGSignal object as flags.
-        """
-        search_name = eeg_signal_obj.name #file name (as defined below)
-        return
-
-
-
+    #     Outputs:
+    #     None. However, adds all seizure data to the EEGSignal object as flags.
+    #     """
+    #     search_name = eeg_signal_obj.name #file name (as defined below)
+    #     return
     
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
         """
