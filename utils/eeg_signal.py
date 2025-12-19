@@ -166,7 +166,7 @@ class EEGSignal:
         """
         #Initialize limit
         if limit is None:
-            limit = 1/self.srate #Limit is within one sample if none supplied
+            limit = 2/self.srate #Limit is within two samples if none supplied
         # Find value val in self.times closest to time
         idx = np.argmin(np.abs(self.times - time))
         val = self.times[idx]

@@ -188,7 +188,9 @@ class EdgeFrequency(EEGAnalyzer):
                 "L_window" : self.time_details["window_length"], 
                 "window_type" : "hamm", #Other option is "rect"; Hamming chosen to reduce spectral leakage
                 "overlap" : self.time_details["advance_time"]/self.time_details["window_length"]*100,
-                "method" : "periodogram"
+                "method" : "periodogram",
+                "SEF" : 0.95, #spectral edge frequency threshold
+                "total_freq_bands" : [0.5, 30]  #Frequency range within which we are calculating SEF
                 }
             sef = main_spectral(window_signal, srate, "spectral_edge_frequency", pass_params)
             return sef
