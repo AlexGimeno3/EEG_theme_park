@@ -19,11 +19,10 @@ class EEGSignal:
         self.data = signal_specs["data"]
         self.original_data = copy.deepcopy(self.data) #Initial data in case the user ever wants to compare after filtering, noising, etc
         self.start_time = signal_specs["start_time"]
-        self.time_collected = signal_specs.get("real_world_start_time", dt.datetime(2000, 1, 1, 0, 0, 0)) #Actual time that the recording began
+        self.datetime_collected = signal_specs.get("datetime_collected", dt.datetime(2000, 1, 1, 0, 0, 0)) #Actual time that the recording began
         self.srate = signal_specs["srate"]
         self.end_time = self.start_time+len(self.data)/self.srate #In the edge case of one data point starting at t=0 sampled at 100 Hz, this means the signal start time is 0, the length is 1, and the end time is 0.01; this has been handled in the subsequent line of code 
         self.times = np.linspace(start=self.start_time, stop=self.end_time, num=len(self.data), endpoint=False) #Assuming a sampling rate of f, each delta-t is 1/f. self.end_time includes the time in the delta-t after the last data point collected at t. However, with linspace, this would cause incorrect time-marking creation, since the last data point would be assumed to be collected at self.end_time = t + delta-t when really it is just collected at t. Since the total recording length is always one delta-t above the total time that we are sampling, we use endpoint = False to eliminate this last delta-t
-        self.time_collected = signal_specs.get("time_collected",dt.time(0, 0, 0)) #Time of the data point at time=0 as a dt.time object.
         self.display_time_lims = []
         self.analyze_time_lims = []
         self.time_series = [] #List of TimeSeries objects to allow for dynamic storage and generation
@@ -73,6 +72,43 @@ class EEGSignal:
         else:
             self._flags[normalized_name][-1] = not self._flags[normalized_name][-1]
 
+    def _get_signal_time(self, time_value):
+        """
+        Convert a datetime/time object to signal-relative time in seconds. Also accepts numeric values (returned unchanged).
+        
+        Inputs:
+        - time_value: float/int (signal-relative seconds), dt.time, or dt.datetime
+        
+        Outputs:
+        - float: signal-relative time in seconds from signal start
+        
+        Examples:
+        - Input: 125.5 → Output: 125.5 (already signal-relative)
+        - Input: dt.time(14, 32, 15) → Output: 135.0 (if recording started at 14:30:00)
+        - Input: dt.datetime(2024, 1, 15, 14, 32, 15) → Output: 135.0 (assuming signal recorded on 15 Jan 2024)
+        """
+        # If already a number, assume it's signal-relative time
+        if isinstance(time_value, (int, float, np.integer, np.floating)):
+            return float(time_value)
+        
+        # Convert dt.time to dt.datetime by assuming it occurred on recording date
+        if isinstance(time_value, dt.time):
+            time_value = dt.datetime.combine(self.datetime_collected.date(), time_value)
+        
+        # Convert dt.datetime to signal-relative time
+        if isinstance(time_value, dt.datetime):
+            time_epoch = time_value.timestamp()
+            recording_epoch = self.datetime_collected.timestamp()
+            
+            # Calculate offset from recording start
+            offset_seconds = time_epoch - recording_epoch
+            
+            # Add to self.start_time (in case signal doesn't start at 0)
+            return self.start_time + offset_seconds
+        
+        raise TypeError(
+            f"Flag time must be numeric (float/int) or datetime object (dt.time/dt.datetime), got {type(time_value).__name__}: {time_value}")
+    
     def add_flag(self, flag_name, value, shade=False):
         """
         Adds flag to the eeg_signal object.
@@ -97,8 +133,9 @@ class EEGSignal:
         value = value.copy()
 
         if len(value) == 1:
-            self._flags[normalized_name] = value
+            self._flags[normalized_name] = [self._get_signal_time(entry) for entry in value]
         elif len(value) == 2:
+            value = [self._get_signal_time(entry) for entry in value]
             value.append(shade)
             self._flags[normalized_name] = value
         else:
@@ -142,43 +179,43 @@ class EEGSignal:
     
     def get_real_time_window(self, flag_times):
         """
-        Function that returns the indices in self.data that correspond to a set of two flag times. Worth noting, flag times are "real world times"; therefore, to find the correct indices, we use self.time_collected.
+        Function that converts real-world datetime objects to signal-relative times, finding the closest actual sample point for each.
+        
         Inputs:
-        - flag_times (arr of dt.time): two dt.time objects that we want to match
+        - flag_times (list of float, dt.time, or dt.datetime): list of flag times
+        
+        Outputs:
+        - list of floats: signal-relative times in seconds (snapped to actual samples)
         """
+        # Convert to signal-relative times
+        converted_times = []
+        tolerance = 2 / self.srate
         
-        # Helper function to convert dt.time to seconds since midnight
-        def time_to_seconds(time_obj):
-            return time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second + time_obj.microsecond / 1e6
+        for flag_time in flag_times:
+            # Use the helper to get signal-relative time
+            signal_time = self._get_signal_time(flag_time)
+            
+            # Find closest actual sample point
+            idx = np.argmin(np.abs(self.times - signal_time))
+            closest_time = self.times[idx]
+            
+            # Validate tolerance
+            if abs(closest_time - signal_time) > tolerance:
+                # Format flag_time for error message based on its type
+                if isinstance(flag_time, dt.datetime):
+                    flag_str = flag_time.strftime('%Y-%m-%d %H:%M:%S')
+                elif isinstance(flag_time, dt.time):
+                    flag_dt = dt.datetime.combine(self.datetime_collected.date(), flag_time)
+                    flag_str = flag_dt.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    # It's a numeric value (float/int)
+                    flag_str = f"{flag_time:.3f}s (signal-relative)"
+                
+                raise ValueError(f"Flag time {flag_str} (converts to signal time {signal_time:.3f}s) is not close to any sample point. Closest sample is at {closest_time:.3f}s (difference: {abs(closest_time - signal_time):.4f}s, tolerance: {tolerance:.4f}s)")
+            
+            converted_times.append(closest_time)
         
-        # Convert self.time_collected to seconds since midnight
-        start_seconds = time_to_seconds(self.time_collected)
-        
-        # Create linearly spaced array starting at self.time_collected 
-        # and advancing by increments of 1/self.srate seconds for as many points as exist in self.data
-        time_increment = 1 / self.srate
-        num_points = len(self.data)
-        new_times_arr = start_seconds + np.arange(num_points) * time_increment
-        
-        # Convert flag_times to seconds since midnight
-        flag_start_seconds = time_to_seconds(flag_times[0])
-        flag_end_seconds = time_to_seconds(flag_times[1])
-        
-        # Find the points in new_times_arr that are closest to flag_times[0] and flag_times[1]
-        start_idx = np.argmin(np.abs(new_times_arr - flag_start_seconds))
-        end_idx = np.argmin(np.abs(new_times_arr - flag_end_seconds))
-        
-        start_point = new_times_arr[start_idx]
-        end_point = new_times_arr[end_idx]
-        
-        # Check if either point is more than 2*1/srate secs away from the flag_time
-        tolerance = 2 * time_increment
-        
-        if abs(start_point - flag_start_seconds) > tolerance or abs(end_point - flag_end_seconds) > tolerance:
-            raise ValueError(f"It looks like this signal does not have data for those flags. Specifically, the flags you gave were {flag_times[0]} and {flag_times[1]}; however, this signal only has times ranging from {new_times_arr[0]} secs to {new_times_arr[-1]} secs.")
-        
-        # Return the from-zero time points of start_point and end_point
-        return [self.times[start_idx], self.times[end_idx]]
+        return converted_times
         
         
 

@@ -4,8 +4,8 @@
 
 import math
 import numpy as np
-from NEURAL_py_EEG import utils
-from NEURAL_py_EEG import NEURAL_parameters
+from eeg_theme_park.utils.NEURAL_py_fork import utils
+from eeg_theme_park.utils.NEURAL_py_fork import NEURAL_parameters
 
 # noinspection SpellCheckingInspection
 def gen_spectrum(x, Fs, param_st, SCALE_PSD=0):

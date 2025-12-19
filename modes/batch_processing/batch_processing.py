@@ -201,6 +201,7 @@ class BatchProcessing(Mode):
             if not flag_times is None:
                 flag_times = get_flag_times(self.excel_path, id, self.event_names) #2-item arr of dt.time object representing the times between which the event occurred.
                 flag_times = eeg_signal.get_real_time_window(flag_times)
+                eeg_signal.add_flag("Analyzed event", flag_times,shade=True)
                 eeg_signal.analyze_time_limits = flag_times #Sets our analysis limits
 
             dicts_arr, error_message = self.pipeline.run_pipeline(eeg_signal) #Array, where each entry is a dictionary with the keys and results
