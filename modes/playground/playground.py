@@ -754,7 +754,7 @@ class PlaygroundMode(Mode):
                 return times, data
             
             # Calculate decimation factor
-            factor = len(data) // max_points
+            factor = len(data) // max_points // 2
             
             # Decimate by taking min/max pairs in each window to preserve features
             downsampled_times = []
@@ -820,8 +820,8 @@ class PlaygroundMode(Mode):
                 ts_plot_times = [t for t, m in zip(ts.times, ts_mask) if m]
                 ts_plot_values = [v for v, m in zip(ts.values, ts_mask) if m]
             
-            #Downsample timeseries if needed; currently turned off
-            #ts_plot_times, ts_plot_values = downsample_data(ts_plot_times, ts_plot_values)
+            #Downsample timeseries if needed
+            ts_plot_times, ts_plot_values = downsample_data(ts_plot_times, ts_plot_values)
             # Use different color for each time series
             color = f'C{idx}'  # matplotlib color cycle (C0, C1, C2, etc.)
             axes[idx].plot(ts_plot_times, ts_plot_values, color=color, linewidth=0.5)
