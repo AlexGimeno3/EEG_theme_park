@@ -304,8 +304,10 @@ class DettiEDFLoader(EEGLoader):
 
             start_time = raw.first_time
             recording_start = raw.info['meas_date']
+            channel_name = channel
             eeg_specs = {
                 "name":file_name,
+                "channel":channel_name,  # <- Added this line
                 "srate":srate,
                 "data":data,
                 "start_time":start_time,

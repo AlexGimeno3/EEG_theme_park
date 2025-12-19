@@ -9,6 +9,7 @@ from eeg_theme_park.utils.gui_utilities import simple_dialogue
 import tkinter as tk
 from tkinter import ttk
 import copy
+from scipy.signal import butter, filtfilt
 
 class EEGFunction(ABC):
     """
@@ -316,4 +317,98 @@ class add_power(EEGFunction):
         
         # Add to original signal
         modified_signal = original_signal + oscillation
+        return modified_signal
+
+class bandpass_filter(EEGFunction):
+    name = "Bandpass Filter" #Required
+    params_units_dict = {"lowpass": "Hz", "highpass": "Hz", "srate": "Hz"} #Required
+    
+    def __init__(self, lowcut=None, highcut=None, srate=None, order: int = 4, **kwargs):
+        """
+        Initializes the bandpass_filter function.
+        
+        Inputs:
+        - lowpass (float): low frequency cutoff for the bandpass filter (Hz)
+        - highpass (float): high frequency cutoff for the bandpass filter (Hz)
+        - srate (float): sampling rate of the signal (Hz)
+        - order (int): filter order (default 4)
+        - **kwargs: additional parameters passed to parent
+        """
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')} #Leave unchanged
+        super().__init__(**params, **kwargs) #Leave unchanged
+        self.__dict__.update(params) #Leave unchanged
+
+        #Edit quality checks
+        if self.lowcut is None or self.highcut is None or self.srate is None:
+            raise ValueError("lowcut, highcut, and srate are required")
+        if self.lowcut >= self.highcut:
+            raise ValueError("lowcut must be less than highcut")
+        if self.highcut >= self.srate / 2:
+            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
+    
+    def _apply_function(self, original_signal, **kwargs): #Edit
+        """
+        Apply bandpass filter to a signal using a Butterworth filter.
+        
+        Inputs:
+        - original_signal (numpy array): signal segment to modify
+        - **kwargs: other parameters
+        
+        Output:
+        - modified_signal (numpy array): filtered signal
+        """
+        # Design the Butterworth bandpass filter
+        nyquist = self.srate / 2
+        low = self.lowcut / nyquist
+        high = self.highcut / nyquist
+        b, a = butter(self.order, [low, high], btype='band')
+        # Apply the filter using zero-phase filtering
+        modified_signal = filtfilt(b, a, original_signal)
+        return modified_signal
+    
+class bandpass_filter(EEGFunction):
+    name = "Bandpass Filter" #Required
+    params_units_dict = {"lowpass": "Hz", "highpass": "Hz", "srate": "Hz"} #Required
+    
+    def __init__(self, lowcut=None, highcut=None, srate=None, order: int = 4, **kwargs):
+        """
+        Initializes the bandpass_filter function.
+        
+        Inputs:
+        - lowpass (float): low frequency cutoff for the bandpass filter (Hz)
+        - highpass (float): high frequency cutoff for the bandpass filter (Hz)
+        - srate (float): sampling rate of the signal (Hz)
+        - order (int): filter order (default 4)
+        - **kwargs: additional parameters passed to parent
+        """
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')} #Leave unchanged
+        super().__init__(**params, **kwargs) #Leave unchanged
+        self.__dict__.update(params) #Leave unchanged
+
+        #Edit quality checks
+        if self.lowcut is None or self.highcut is None or self.srate is None:
+            raise ValueError("lowcut, highcut, and srate are required")
+        if self.lowcut >= self.highcut:
+            raise ValueError("lowcut must be less than highcut")
+        if self.highcut >= self.srate / 2:
+            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
+    
+    def _apply_function(self, original_signal, **kwargs): #Edit
+        """
+        Apply bandpass filter to a signal using a Butterworth filter.
+        
+        Inputs:
+        - original_signal (numpy array): signal segment to modify
+        - **kwargs: other parameters
+        
+        Output:
+        - modified_signal (numpy array): filtered signal
+        """
+        # Design the Butterworth bandpass filter
+        nyquist = self.srate / 2
+        low = self.lowcut / nyquist
+        high = self.highcut / nyquist
+        b, a = butter(self.order, [low, high], btype='band')
+        # Apply the filter using zero-phase filtering
+        modified_signal = filtfilt(b, a, original_signal)
         return modified_signal
