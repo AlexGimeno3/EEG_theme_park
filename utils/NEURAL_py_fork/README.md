@@ -1,0 +1,1 @@
+This fork was created from the NEURAL PY feature set at https://github.com/BrianMur92/NEURAL_py_EEG_feature_set. I have edited portions of it to make it compatible with EEG Theme Park; namely, this has involved altering function outputs to return a single frequency band, rather than an array of values from different frequency bands.

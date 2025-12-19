@@ -4,6 +4,7 @@ This file will contain the different functions that we want to use to analyze ou
 
 from abc import ABC, abstractmethod
 from eeg_theme_park.utils.eeg_signal import TimeSeries
+from eeg_theme_park.utils.NEURAL_py_fork.spectral_features import main_spectral
 import numpy as np
 from tqdm import tqdm
 import copy
@@ -152,6 +153,46 @@ class Power8to10Hz(EEGAnalyzer):
             #Analysis code here
             #---------------------------------------
             srate = eeg_object.srate
+            freq_low = 8
+            freq_high = 10
+            fft_values = np.fft.fft(window_signal)
+            fft_freqs = np.fft.fftfreq(len(window_signal), 1/srate)
+            # Get positive frequencies only
+            pos_mask = fft_freqs >= 0
+            fft_freqs = fft_freqs[pos_mask]
+            fft_values = fft_values[pos_mask]
+            # Find indices in frequency band
+            freq_mask = (fft_freqs >= freq_low) & (fft_freqs <= freq_high)
+            # Compute power (magnitude squared, normalized)
+            power_spectrum = np.abs(fft_values) ** 2 / len(window_signal)
+            band_power = np.sum(power_spectrum[freq_mask])
+            return band_power
+            #----------------------
+
+class EdgeFrequency(EEGAnalyzer):
+    """
+    Compute spectral edge frequency.
+    """
+    name = "spectral_edge_frequency" #Edit to include the correct name
+    units = "Hz" #Edit to include the correct units
+    time_details = {"window_length":30, "advance_time":15} #Edit to perform windowing as you would like (currently, this means the function is applied to 2-second-long windows, advancing each time by 1 second [i.e., with 50% overlap])
+    
+    def __init__(self, **kwargs): #Leave unchanged
+        super().__init__(**kwargs) #Leave unchanged
+    
+    def _apply_function(self, window_signal, eeg_object, **kwargs): #Leave unchanged
+            #Analysis code here
+            #---------------------------------------
+            srate = eeg_object.srate
+            pass_params = {
+                "L_window" : self.time_details["window_length"], 
+                "window_type" : "hamm", #Other option is "rect"; Hamming chosen to reduce spectral leakage
+                "overlap" : self.time_details["advance_time"]/self.time_details["window_length"]*100,
+                "method" : "periodogram"
+                }
+            sef = main_spectral(window_signal, srate, "spectral_edge_frequency", pass_params)
+            return sef
+
             freq_low = 8
             freq_high = 10
             fft_values = np.fft.fft(window_signal)
