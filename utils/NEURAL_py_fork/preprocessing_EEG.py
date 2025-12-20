@@ -235,7 +235,7 @@ def art_per_channel(x, Fs, params):
             irem[irun] = 1
 
     x[irem == 1] = np.nan
-    if any(irem == 1) and DBverbose:
+    if any(irem == 1):
         print("length of sudden-jump artefacts: %.2f%%\n" % (100 * (np.sum(irem) / N)))
     amount_removed[3] = 100 * (np.sum(irem) / N)
 

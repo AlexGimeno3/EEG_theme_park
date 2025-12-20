@@ -330,7 +330,8 @@ class DettiEDFLoader(EEGLoader):
             channel_name = channel
             eeg_specs = {
                 "name":file_name,
-                "channel":channel_name,  # <- Added this line
+                "channel":channel_name,
+                "sourcer":sourcer,
                 "srate":srate,
                 "data":data,
                 "start_time":start_time,
