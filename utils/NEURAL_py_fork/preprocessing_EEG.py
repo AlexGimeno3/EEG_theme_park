@@ -126,8 +126,8 @@ def art_per_channel(x, Fs, params):
     N = len(x)
 
     eegtp_to_neural_dict = {
-        "max_zero_length":"ART_ELEC_CHECK" #Number of seconds above which a run of 0s is considered artefact
-        "high_amp_collar":"ART_TIME_COLLAR" #Number of seconds rejected before and after a high-ampitude artefact 
+        "max_zero_length":"ART_ELEC_CHECK", #Number of seconds above which a run of 0s is considered artefact
+        "high_amp_collar":"ART_TIME_COLLAR", #Number of seconds rejected before and after a high-ampitude artefact 
         "jump_collar":"ART_DIFF_TIME_COLLAR", #Number of seconds rejected before and after sudden-jump and repeated-values artefacts
         "max_repeat_length":"ART_DIFF_MIN_TIME", #Number of seconds above which a run of any value is considered artefact
         "max_voltage":"ART_HIGH_VOLT", #Maximum voltage (in uV) allowed before signal is considered artefact 
