@@ -395,7 +395,96 @@ def get_specs(signal_specs = {}, parent = None):
     #dialogue.destroy() only occurs after hitting submit, which assigns ret_var to the cleaned specifications dictionary
     return ret_var
 
-
+def dropdown_menu(text, options, multiple=False, parent=None):
+    """
+    Creates a dialogue box with a dropdown menu or checkboxes for selection.
+    
+    Inputs:
+    - text (str): instruction text to display
+    - options (list): list of options to display
+    - multiple (bool): if True, allows multiple selections with checkboxes
+    - parent (tkinter root): parent window, if it exists
+    
+    Outputs:
+    - result: selected option(s) as string (single) or list (multiple), or None if cancelled
+    """
+    result = {'selection': None}
+    
+    def on_submit():
+        if multiple:
+            # Collect all checked items
+            selected = [opt for opt, var in checkbox_vars.items() if var.get()]
+            result['selection'] = selected if selected else None
+        else:
+            # Get single selection
+            selection = selected_var.get()
+            result['selection'] = selection if selection else None
+        dialogue.destroy()
+    
+    def on_cancel():
+        dialogue.destroy()
+    
+    dialogue = tk.Toplevel(parent)
+    dialogue.title("Select Options")
+    dialogue.geometry("600x400")
+    dialogue.attributes('-topmost', True)
+    dialogue.lift()
+    dialogue.focus_force()
+    
+    # Instruction label
+    label = ttk.Label(dialogue, text=text, wraplength=580)
+    label.pack(padx=10, pady=10)
+    
+    # Create scrollable frame for options
+    canvas_frame = ttk.Frame(dialogue)
+    canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    canvas = tk.Canvas(canvas_frame)
+    scrollbar = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+    scrollable_frame = ttk.Frame(canvas)
+    
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+    
+    if multiple:
+        # Create checkboxes for multiple selection
+        checkbox_vars = {}
+        for option in options:
+            var = tk.BooleanVar(value=False)
+            checkbox_vars[option] = var
+            cb = ttk.Checkbutton(scrollable_frame, text=option, variable=var)
+            cb.pack(anchor='w', padx=5, pady=2)
+    else:
+        # Create radiobuttons for single selection
+        selected_var = tk.StringVar(value="")
+        for option in options:
+            rb = ttk.Radiobutton(scrollable_frame, text=option, 
+                                variable=selected_var, value=option)
+            rb.pack(anchor='w', padx=5, pady=2)
+    
+    # Button frame
+    button_frame = ttk.Frame(dialogue)
+    button_frame.pack(pady=10)
+    
+    submit_btn = ttk.Button(button_frame, text="Submit", command=on_submit)
+    submit_btn.pack(side=tk.LEFT, padx=5)
+    
+    cancel_btn = ttk.Button(button_frame, text="Cancel", command=on_cancel)
+    cancel_btn.pack(side=tk.LEFT, padx=5)
+    
+    windll.shcore.SetProcessDpiAwareness(1)
+    dialogue.grab_set()
+    dialogue.wait_window()
+    
+    return result['selection']
 
 
     
