@@ -247,6 +247,7 @@ def art_per_channel(x, Fs, params):
     # x_nofilt[irem_muc == 1] = np.inf
     x = x_nofilt
 
+    print("Artefact rejection done!")
     return x, amount_removed
 
 

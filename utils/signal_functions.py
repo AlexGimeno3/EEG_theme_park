@@ -10,7 +10,7 @@ from eeg_theme_park.utils.NEURAL_py_fork.preprocessing_EEG import art_per_channe
 import tkinter as tk
 from tkinter import ttk
 import copy
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, sosfiltfilt
 
 class EEGFunction(ABC):
     """
@@ -48,43 +48,46 @@ class EEGFunction(ABC):
     
     def apply(self, eeg_object, time_range=None, flags_bool=True, min_clean_length = 0):
         """
-        Template method to apply the given function to a signal. Done so certain internal processes are always carried out. Sublclasses should contain all the code that modifies the signal, but does not need to log (this is handled internally by the EEGSignal object).
+        Template method to apply the given function to a signal.
 
         Inputs:
-        - eeg_object (EEGSignal object): EEGSignal object that 
-        - time_range (list): time range in seconds over which to apply the function (NB: this is indexed to the actual time values of this signal, not to zero). If none, defaults to the entire signal
-        - flags_bool (bool): if True, will add to the EEGSignal.flags dictionary the flags we need
-        - min_clean_length (float): minimum length (in seconds) of clean segments to process. Segments shorter than this will be marked as NaN. 
+        - eeg_object (EEGSignal object): EEGSignal object
+        - time_range (list): time range in seconds. If None and analyze_time_lims is set, uses analyze_time_lims. Otherwise uses entire signal.
+        - flags_bool (bool): if True, will add flags
+        - min_clean_length (float): minimum length (in seconds) of clean segments to process
 
         Output:
-        - eeg_object (EEGSignal object): EEGSignal object after our change has been applied
+        - eeg_object (EEGSignal object): EEGSignal object after change has been applied
         """
+        # Determine time range to process
         if time_range is None:
-            time_range = [eeg_object.times[0],eeg_object.times[-1]]
-        try: # Get the indices corresponding to the time range; raise exception if an error occurs
+            # Check if analyze_time_lims is set
+            if len(eeg_object.analyze_time_lims) > 0:
+                time_range = [eeg_object.analyze_time_lims[0], eeg_object.analyze_time_lims[1]]
+            else:
+                time_range = [eeg_object.times[0], eeg_object.times[-1]]
+        
+        try:
             start_idx = eeg_object.time_to_index(time_range[0])
             end_idx = eeg_object.time_to_index(time_range[1])
         except Exception as e:
             raise type(e)(f"{str(e)}; the time range you asked to apply the function to was {time_range[0]}-{time_range[1]} secs, but the signal only goes from {eeg_object.start_time} to {eeg_object.end_time} secs.") from e
 
-        if min_clean_length > 0: #Perform cleaning of too-short segments
-                from eeg_theme_park.utils.pipeline import find_clean_segments
-                data_to_process = eeg_object.data[start_idx:end_idx+1]
-                # Find clean segments within this data
-                clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
-                
-                # Create output array (initialize with NaN)
-                processed_data = np.full_like(data_to_process, np.nan)
-                
-                # Process each clean segment
-                for seg_start, seg_end in clean_segments:
-                    segment_data = data_to_process[seg_start:seg_end]
-                    processed_segment = self._apply_function(segment_data, eeg_object)
-                    processed_data[seg_start:seg_end] = processed_segment
-                
-                eeg_object.data[start_idx:end_idx+1] = processed_data     
+        if min_clean_length > 0:
+            from eeg_theme_park.utils.pipeline import find_clean_segments
+            data_to_process = eeg_object.data[start_idx:end_idx+1]
+            clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
+            
+            processed_data = np.full_like(data_to_process, np.nan)
+            
+            for seg_start, seg_end in clean_segments:
+                segment_data = data_to_process[seg_start:seg_end]
+                processed_segment = self._apply_function(segment_data, eeg_object)
+                processed_data[seg_start:seg_end] = processed_segment
+            
+            eeg_object.data[start_idx:end_idx+1] = processed_data     
         
-        else: # No clean segment filtering
+        else:
             data_to_process = eeg_object.data[start_idx:end_idx+1]
             edited_data = self._apply_function(data_to_process, eeg_object)
             eeg_object.data[start_idx:end_idx+1] = edited_data
@@ -438,7 +441,8 @@ class bandpass_filter(EEGFunction):
         high = self.highpass / nyquist
         if self.highpass >= eeg_object.srate / 2:
             raise ValueError("highpass must be less than Nyquist frequency (srate/2)")
-        b, a = butter(self.order, [low, high], btype='band')
+        sos = butter(self.order, [low, high], btype='band', output='sos')
         # Apply the filter using zero-phase filtering
-        modified_signal = filtfilt(b, a, original_signal)
+        modified_signal = sosfiltfilt(sos, original_signal)
+        print("Bandpass filtering done!")
         return modified_signal

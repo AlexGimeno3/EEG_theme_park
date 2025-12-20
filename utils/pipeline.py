@@ -4,6 +4,7 @@ import pandas as pd
 import copy
 from scipy.stats import theilslopes, kendalltau
 import numpy as np
+import gc
 
 """
 File containing the Pipeline class, which is used to create exportable and loadable EEG processing pipelines between users.
@@ -196,6 +197,11 @@ class Pipeline:
             print(error_message)
             return None, error_message
         
-        del eeg_signal
+        finally:
+            # Explicitly delete and garbage collect
+            if 'eeg_signal' in locals():
+                del eeg_signal
+            gc.collect()  # Force garbage collection
+        
         self.ever_run = True
         return results_arr, None
