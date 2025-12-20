@@ -47,6 +47,31 @@ class EEGLoader(ABC):
         """
         pass
 
+    def get_channel(self, channel_names, provided_channel=None, **kwargs):
+        """
+        Helper method to handle channel selection with auto-select support. All loaders should use this instead of calling choose_channel directly.
+        
+        Inputs:
+        - channel_names (list): Available channel names from the file
+        - provided_channel (str or None): Channel explicitly requested
+        - **kwargs: May contain 'auto_select_channel'
+        
+        Outputs:
+        - (channel_name, channel_index): Selected channel and its index
+        """
+        auto_select = kwargs.get('auto_select_channel', False)
+        
+        # Normalize provided channel
+        if provided_channel is not None:
+            provided_channel = provided_channel.upper()
+        
+        # Check if provided channel is valid
+        if provided_channel and provided_channel in channel_names:
+            return (provided_channel, channel_names.index(provided_channel))
+        
+        # Need to select a channel - either auto or via GUI
+        return choose_channel(channel_names, auto_select=auto_select)
+
 class AllLoaders:
     """
     Registry class that stores all the loaders we have coded thus far.
@@ -119,8 +144,7 @@ class BDFLoader(EEGLoader):
             srate = raw.info['sfreq']
             channel_names = [name.upper() for name in raw.ch_names]
             print(channel_names)
-            if (channel is None) or (not channel in channel_names):
-                channel, channel_i = choose_channel(channel_names)
+            channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
             data = raw.get_data(picks="eeg")
             data = data[channel_i, :]
             start_time = raw.first_time
@@ -278,9 +302,11 @@ class DettiEDFLoader(EEGLoader):
     
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
         """
-        NB: accepts "channel" from kwargs
+        NB: accepts "channel" and "sourcer" from kwargs. channel is the EEG channel we are using, while sourcer is a string that specifies what protocol we should use to gather flags. "unspecified" for sourcer will not prompt any flag retrieval
         """
         channel = kwargs.get('channel', None)
+        auto_select_channel = kwargs.get('auto_select_channel', False)
+        sourcer = kwargs.get("sourcer", None)  # Get cached value
         if not channel is None:
             channel = channel.upper()
         
@@ -292,10 +318,7 @@ class DettiEDFLoader(EEGLoader):
             raw = mne.io.read_raw_edf(file_path, preload=False, verbose=False)
             srate = raw.info['sfreq']
             channel_names = [name.upper() for name in raw.ch_names]
-            if (channel is None) or (not channel in channel_names):
-                channel, channel_i = choose_channel(channel_names)
-            else:
-                channel_i = channel_names.index(channel)
+            channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
 
             #Load the data
             original_channel_name = raw.ch_names[channel_i]
@@ -329,8 +352,10 @@ class DettiEDFLoader(EEGLoader):
                 
                 eeg_signal_obj.add_flag(name, times)
             
-            detti_bool = yes_no("Are these files from Detti et al.?")
-            if detti_bool:
+            if sourcer is None:
+                detti_bool = yes_no("Are these files from Detti et al.?")
+                sourcer = ["detti" if detti_bool else "unspecified"][0]
+            if sourcer == "detti":
                 self.add_flags(eeg_signal_obj)
             
             return (eeg_signal_obj, file_path)

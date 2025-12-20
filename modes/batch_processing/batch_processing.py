@@ -164,7 +164,7 @@ class BatchProcessing(Mode):
             if self.files_dir is not None and hasattr(self, 'names_list') and len(self.names_list) > 0:
                 try:
                     first_file = self.names_list[0]
-                    eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True)[0]
+                    eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True, auto_select_channel = True)[0]
                     # Extract unique flag names from the flags dictionary
                     if hasattr(eeg_signal, 'flags') and eeg_signal.flags:
                         available_flags = list(eeg_signal.flags.keys())
@@ -251,11 +251,14 @@ class BatchProcessing(Mode):
         
         # Step 3: Load our files one-by-one and run pipeline
         channel_name = None
+        sourcer = None
         for path in self.names_list:
-            eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=channel_name)[0]
+            eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=channel_name, sourcer = sourcer)[0]
             id = eeg_signal.name
             if not eeg_signal.channel is None:
                 channel_name = eeg_signal.channel
+            if not sourcer is None:
+                sourcer = eeg_signal.sourcer
 
             # Add flag information based on mode
             if self.use_existing_flags and self.existing_flag_names is not None:

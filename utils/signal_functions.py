@@ -344,7 +344,7 @@ class art_reject(EEGFunction):
     params_units_dict = {"max_zero_length": "secs", "high_amp_collar": "secs", "jump_collar": "secs", "max_repeat_length":"secs", "max_voltage":"uV", "max_jump":"uV"} #Required
     
     
-    def __init__(self, srate = None, max_zero_length=1, high_amp_collar=10, jump_collar=0.5, max_repeat_length=0.1, max_voltage=1500, max_jump=200, **kwargs):
+    def __init__(self, max_zero_length=1, high_amp_collar=10, jump_collar=0.5, max_repeat_length=0.1, max_voltage=1500, max_jump=200, **kwargs):
         """
         Initializes the function.
         
@@ -414,12 +414,10 @@ class bandpass_filter(EEGFunction):
         self.__dict__.update(params) #Leave unchanged
 
         #Edit quality checks
-        if self.lowcut is None or self.highcut is None or self.srate is None:
-            raise ValueError("lowcut, highcut, and srate are required")
+        if self.lowcut is None or self.highcut is None:
+            raise ValueError("lowcut and highcut are required")
         if self.lowcut >= self.highcut:
             raise ValueError("lowcut must be less than highcut")
-        if self.highcut >= self.srate / 2:
-            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
     
     def _apply_function(self, original_signal, eeg_object, **kwargs): #Edit
         """
@@ -436,6 +434,8 @@ class bandpass_filter(EEGFunction):
         nyquist = eeg_object.srate / 2
         low = self.lowcut / nyquist
         high = self.highcut / nyquist
+        if self.highcut >= eeg_object.srate / 2:
+            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
         b, a = butter(self.order, [low, high], btype='band')
         # Apply the filter using zero-phase filtering
         modified_signal = filtfilt(b, a, original_signal)
