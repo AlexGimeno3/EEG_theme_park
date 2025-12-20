@@ -167,7 +167,7 @@ class BatchProcessing(Mode):
                     eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True)[0]
                     # Extract unique flag names from the flags dictionary
                     if hasattr(eeg_signal, 'flags') and eeg_signal.flags:
-                        available_flags = list(set(flag_data[0] for flag_data in eeg_signal.flags.values()))
+                        available_flags = list(eeg_signal.flags.keys())
                 except Exception as e:
                     print(f"Could not load flags from first file: {e}")
             

@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 import numpy as np
 import inspect
 from eeg_theme_park.utils.gui_utilities import simple_dialogue
-from eeg_theme_park.utils.pipeline import find_clean_segments
 import tkinter as tk
 from tkinter import ttk
 import copy
@@ -68,6 +67,7 @@ class EEGFunction(ABC):
             raise type(e)(f"{str(e)}; the time range you asked to apply the function to was {time_range[0]}-{time_range[1]} secs, but the signal only goes from {eeg_object.start_time} to {eeg_object.end_time} secs.") from e
 
         if min_clean_length > 0: #Perform cleaning of too-short segments
+                from eeg_theme_park.utils.pipeline import find_clean_segments
                 data_to_process = eeg_object.data[start_idx:end_idx+1]
                 # Find clean segments within this data
                 clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
@@ -338,20 +338,22 @@ class add_power(EEGFunction):
         modified_signal = original_signal + oscillation
         return modified_signal
 
-class bandpass_filter(EEGFunction):
-    name = "Bandpass Filter" #Required
-    params_units_dict = {"lowpass": "Hz", "highpass": "Hz", "srate": "Hz"} #Required
+class art_reject(EEGFunction):
+    name = "Artefact Rejection" #Required
+    params_units_dict = {"max_zero_length": "secs", "high_amp_collar": "secs", "jump_collar": "secs", "max_repeat_length":"secs", "max_voltage":"uV", "max_jump":"uV"} #Required
     
-    def __init__(self, lowcut=None, highcut=None, srate=None, order: int = 4, **kwargs):
+    
+    def __init__(self, max_zero_length=None, high_amp_collar=None, jump_collar=None, max_repeat_length=None, max_voltage=None, max_jump=None, **kwargs):
         """
-        Initializes the bandpass_filter function.
+        Initializes the function.
         
         Inputs:
-        - lowpass (float): low frequency cutoff for the bandpass filter (Hz)
-        - highpass (float): high frequency cutoff for the bandpass filter (Hz)
-        - srate (float): sampling rate of the signal (Hz)
-        - order (int): filter order (default 4)
-        - **kwargs: additional parameters passed to parent
+        - max_zero_length: Number of seconds above which a run of 0s is considered artefact
+        - high_amp_collar: Number of seconds rejected before and after a high-ampitude artefact 
+        - jump_collar: Number of seconds rejected before and after sudden-jump and repeated-values artefacts
+        - max_repeat_length: Number of seconds above which a run of any value is considered artefact
+        - max_voltage: Maximum voltage (in uV) allowed before signal is considered artefact 
+        - max_jump: Maximum voltage difference (in uV) allowed between consecutive values before signal is considered artefact
         """
         params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')} #Leave unchanged
         super().__init__(**params, **kwargs) #Leave unchanged

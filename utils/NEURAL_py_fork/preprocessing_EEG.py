@@ -110,19 +110,36 @@ def overlap_epochs(x, Fs, L_window, overlap=50, window_type="rect"):
     return x_epochs, x_epochs_inds.astype(int)
 
 
-def art_per_channel(x, Fs, DBverbose):
+def art_per_channel(x, Fs, params):
     """
-    Remove artefacts on a per-channel basis
+    Remove artefacts from a single channel
 
-    :param DBverbose:
-    :param x: data from a single channel - numpy array
-    :param Fs: sampling frequency
-    :return: x, data with artefacts set as nan
+    Inputs:
+    - x (numpy array): data from a single channel
+    - Fs (float): sampling rate in Hz
+    - params (dict): dict containing at least the following: {}
+
+    OutputS:
+    - x (numpy array): original data with artefacts set as NaN
     """
-    params = NEURAL_parameters.NEURAL_parameters()
 
-    # DBverbose = 1
-    N = len(x)  # verify / check this
+    N = len(x)
+
+    eegtp_to_neural_dict = {
+        "max_zero_length":"ART_ELEC_CHECK" #Number of seconds above which a run of 0s is considered artefact
+        "high_amp_collar":"ART_TIME_COLLAR" #Number of seconds rejected before and after a high-ampitude artefact 
+        "jump_collar":"ART_DIFF_TIME_COLLAR", #Number of seconds rejected before and after sudden-jump and repeated-values artefacts
+        "max_repeat_length":"ART_DIFF_MIN_TIME", #Number of seconds above which a run of any value is considered artefact
+        "max_voltage":"ART_HIGH_VOLT", #Maximum voltage (in uV) allowed before signal is considered artefact 
+        "max_jump":"ART_DIFF_VOLT" #Maximum voltage difference (in uV) allowed between consecutive values before signal is considered artefact
+    }
+
+    
+    #Intialize function
+    needed_params = [val for val in eegtp_to_neural_dict.keys()]
+    for param in needed_params:
+        if param not in params.keys():
+            params[param] = NEURAL_parameters[eegtp_to_neural_dict[param]]
 
     amount_removed = np.array([0, 0, 0, 0], dtype=float)
     # ---------------------------------------------------------------------
@@ -136,9 +153,7 @@ def art_per_channel(x, Fs, DBverbose):
 
     if ielec.size != 0:
         for m in ielec:
-            irun = np.array(
-                range((istart[m] - 1), (iend[m] + 2), 1)
-            )  # TODO check this against matlab
+            irun = np.array(range((istart[m] - 1), (iend[m] + 2), 1))  # TODO check this against matlab [sic]
             irun[np.where(irun < 0)] = 0
             irun[np.where(irun > N - 1)] = N - 1
             irem[irun] = 1
@@ -170,10 +185,8 @@ def art_per_channel(x, Fs, DBverbose):
             irun[np.where(irun > N - 1)] = N - 1
             irem[irun] = 1
     x[irem == 1] = np.nan
-    if any(irem == 1) and DBverbose:
-        print(
-            "length of high-amplitude artefacts: %.2f%%\n" % (100 * (np.sum(irem) / N))
-        )
+    if any(irem == 1):
+        print("length of high-amplitude artefacts: %.2f%%\n" % (100 * (np.sum(irem) / N)))
     amount_removed[1] = 100 * (np.sum(irem) / N)
 
     # ---------------------------------------------------------------------
@@ -200,9 +213,7 @@ def art_per_channel(x, Fs, DBverbose):
             irem[irun] = 1
             x[irun] = np.nan
     if any(irem == 1):
-        print(
-            "continuous row of constant values: %.2f%%\n" % (100 * (np.sum(irem) / N))
-        )
+        print("continuous row of constant values: %.2f%%\n" % (100 * (np.sum(irem) / N)))
     amount_removed[2] = 100 * (np.sum(irem) / N)
 
     # ---------------------------------------------------------------------
@@ -237,182 +248,182 @@ def art_per_channel(x, Fs, DBverbose):
     return x, amount_removed
 
 
-def remove_artefacts(data, ch_labels, Fs, data_ref, ch_labels_ref):
-    """
-    remove_artefacts: simple procedure to remove artefacts
+# def remove_artefacts(data, ch_labels, Fs, data_ref, ch_labels_ref):
+#     """
+#     remove_artefacts: simple procedure to remove artefacts
 
-    Syntax: data = remove_artefacts(data, ch_labels, Fs, data_ref, ch_refs)
+#     Syntax: data = remove_artefacts(data, ch_labels, Fs, data_ref, ch_refs)
 
-    Inputs:
-        data      - EEG data, in bipolar montage; size: N_channels x N (pandas dataframe)
-        ch_labels - List of bipolar channel labels,
-                    e.g. ['C3-O1','C4-O2', 'F3-C3', 'F4-C4']
-        Fs        - sampling frequency (in Hz)
-        data_ref  - EEG data, in referential  montage; size: (N_channels+1) x N
-        ch_refs   - List of referential channel labels,
-                    e.g. ['C3','C4','F3','F4']
+#     Inputs:
+#         data      - EEG data, in bipolar montage; size: N_channels x N (pandas dataframe)
+#         ch_labels - List of bipolar channel labels,
+#                     e.g. ['C3-O1','C4-O2', 'F3-C3', 'F4-C4']
+#         Fs        - sampling frequency (in Hz)
+#         data_ref  - EEG data, in referential  montage; size: (N_channels+1) x N
+#         ch_refs   - List of referential channel labels,
+#                     e.g. ['C3','C4','F3','F4']
 
-    Outputs:
-        data - EEG data after processing, in bipolar montage, size: N_channels x N  (pandas dataframe)
+#     Outputs:
+#         data - EEG data after processing, in bipolar montage, size: N_channels x N  (pandas dataframe)
 
-    Example:
-        import utils
-        import numpy as np
-        import preprocessing_EEG
-        Fs = 256
-        data_st = utils.gen_test_EEGdata(2*60, Fs, 1)
-        N = len(data_st['eeg_data_ref'])
+#     Example:
+#         import utils
+#         import numpy as np
+#         import preprocessing_EEG
+#         Fs = 256
+#         data_st = utils.gen_test_EEGdata(2*60, Fs, 1)
+#         N = len(data_st['eeg_data_ref'])
 
-        # simulate artefacts:
-        # 1. F3 not properly attached:
-        if3 = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'F3'][0]
-        data_st['eeg_data_ref'][data_st['ch_labels_ref'][if3]] = np.random.randn(N) * 10
+#         # simulate artefacts:
+#         # 1. F3 not properly attached:
+#         if3 = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'F3'][0]
+#         data_st['eeg_data_ref'][data_st['ch_labels_ref'][if3]] = np.random.randn(N) * 10
 
-        # 2. electrode coupling between C4 and Cz
-        ic4 = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'C4'][0]
-        icz = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'Cz'][0]
+#         # 2. electrode coupling between C4 and Cz
+#         ic4 = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'C4'][0]
+#         icz = [i for i, x in enumerate(data_st['ch_labels_ref']) if x == 'Cz'][0]
 
-        data_st['eeg_data_ref'][data_st['ch_labels_ref'][icz]] = data_st['eeg_data_ref'][data_st['ch_labels_ref'][ic4]]
-                                                                + np.random.randn(N) * 5
+#         data_st['eeg_data_ref'][data_st['ch_labels_ref'][icz]] = data_st['eeg_data_ref'][data_st['ch_labels_ref'][ic4]]
+#                                                                 + np.random.randn(N) * 5
 
-        # re-generate bipolar montage:
-        data_st['eeg_data'], data_st['ch_labels'] = utils.set_bi_montage(data_st['eeg_data_ref'], Fs,
-                                                    data_st['ch_labels_bi'])
+#         # re-generate bipolar montage:
+#         data_st['eeg_data'], data_st['ch_labels'] = utils.set_bi_montage(data_st['eeg_data_ref'], Fs,
+#                                                     data_st['ch_labels_bi'])
 
-        # remove channels:
-        eeg_art = preprocessing_EEG.remove_artefacts(data_st['eeg_data'].copy(), data_st['ch_labels'], data_st['Fs'],
-                                         data_st['eeg_data_ref'], data_st['ch_labels_ref'])
-    """
-    params = NEURAL_parameters.NEURAL_parameters()
-    DBverbose = 1
+#         # remove channels:
+#         eeg_art = preprocessing_EEG.remove_artefacts(data_st['eeg_data'].copy(), data_st['ch_labels'], data_st['Fs'],
+#                                          data_st['eeg_data_ref'], data_st['ch_labels_ref'])
+#     """
+#     params = NEURAL_parameters.NEURAL_parameters()
+#     DBverbose = 1
 
-    N, N_channels = data.shape
+#     N, N_channels = data.shape
 
-    # ---------------------------------------------------------------------
-    # 0. check in referential mode first; is there problem with one
-    #    channel(e.g.Cz)
-    # ---------------------------------------------------------------------
-    irem_channel = np.array([], dtype=int)
-    channel_names_ref = list(data_ref.columns)
-    if not data_ref.empty:
-        x_filt = np.zeros([data_ref.shape[1], data_ref.shape[0]])
-        for ch in range(data_ref.shape[1]):
-            x_filt[ch, :], dum = utils.filter_butterworth_withnans(
-                data_ref[channel_names_ref[ch]].to_numpy(), Fs, 20, 0.5, 5
-            )
+#     # ---------------------------------------------------------------------
+#     # 0. check in referential mode first; is there problem with one
+#     #    channel(e.g.Cz)
+#     # ---------------------------------------------------------------------
+#     irem_channel = np.array([], dtype=int)
+#     channel_names_ref = list(data_ref.columns)
+#     if not data_ref.empty:
+#         x_filt = np.zeros([data_ref.shape[1], data_ref.shape[0]])
+#         for ch in range(data_ref.shape[1]):
+#             x_filt[ch, :], dum = utils.filter_butterworth_withnans(
+#                 data_ref[channel_names_ref[ch]].to_numpy(), Fs, 20, 0.5, 5
+#             )
 
-        r = np.corrcoef(x_filt)
-        np.fill_diagonal(r, np.nan)
-        r_channel = np.nanmean(r, axis=0)
-        del x_filt
+#         r = np.corrcoef(x_filt)
+#         np.fill_diagonal(r, np.nan)
+#         r_channel = np.nanmean(r, axis=0)
+#         del x_filt
 
-        ilow = np.array(
-            np.where(np.abs(r_channel) < params["ART_REF_LOW_CORR"])
-        ).astype(int)[0]
+#         ilow = np.array(
+#             np.where(np.abs(r_channel) < params["ART_REF_LOW_CORR"])
+#         ).astype(int)[0]
 
-        if ilow.size != 0:
-            nn = 1
-            irem_channel = np.array([], dtype=int)
-            for idex in ilow:
-                ch_find = ch_labels_ref[idex]
-                itmp = [i for i, x in enumerate(ch_labels) if ch_find in x]
-                irem_channel = np.append(irem_channel, itmp)
-                nn += 1
-            print(
-                ":: remove channel (low ref. correlation): %s\n"
-                % np.array(ch_labels)[irem_channel.astype(int)]
-            )
+#         if ilow.size != 0:
+#             nn = 1
+#             irem_channel = np.array([], dtype=int)
+#             for idex in ilow:
+#                 ch_find = ch_labels_ref[idex]
+#                 itmp = [i for i, x in enumerate(ch_labels) if ch_find in x]
+#                 irem_channel = np.append(irem_channel, itmp)
+#                 nn += 1
+#             print(
+#                 ":: remove channel (low ref. correlation): %s\n"
+#                 % np.array(ch_labels)[irem_channel.astype(int)]
+#             )
 
-        # if DBverbose:
-        # print(r_channel)
-        # print(ch_labels_ref)
-        for ch in range(len(irem_channel)):
-            data[ch_labels[irem_channel[ch].astype(int)]] = np.nan
+#         # if DBverbose:
+#         # print(r_channel)
+#         # print(ch_labels_ref)
+#         for ch in range(len(irem_channel)):
+#             data[ch_labels[irem_channel[ch].astype(int)]] = np.nan
 
-    ichannels = list(range(N_channels))
-    ichannels = np.delete(ichannels, irem_channel)
-    N_channels = len(ichannels)
+#     ichannels = list(range(N_channels))
+#     ichannels = np.delete(ichannels, irem_channel)
+#     N_channels = len(ichannels)
 
-    # ---------------------------------------------------------------------
-    # 1. look for electrode coupling:
-    # ---------------------------------------------------------------------
-    ch_labels = np.array(ch_labels)
-    if N_channels > 4:
-        ileft, iright = channel_hemispheres(ch_labels[ichannels])
+#     # ---------------------------------------------------------------------
+#     # 1. look for electrode coupling:
+#     # ---------------------------------------------------------------------
+#     ch_labels = np.array(ch_labels)
+#     if N_channels > 4:
+#         ileft, iright = channel_hemispheres(ch_labels[ichannels])
 
-        if len(ileft) > 1 and len(iright) > 1:
-            x_means = np.zeros(N_channels)
+#         if len(ileft) > 1 and len(iright) > 1:
+#             x_means = np.zeros(N_channels)
 
-            x_filt = np.zeros([data_ref.shape[1], data_ref.shape[0]])
-            for ch in range(N_channels):
-                x_filt[ch, :], dum = utils.filter_butterworth_withnans(
-                    data[ch_labels[ichannels[ch]]].to_numpy(), Fs, 20, 0.5, 5
-                )
+#             x_filt = np.zeros([data_ref.shape[1], data_ref.shape[0]])
+#             for ch in range(N_channels):
+#                 x_filt[ch, :], dum = utils.filter_butterworth_withnans(
+#                     data[ch_labels[ichannels[ch]]].to_numpy(), Fs, 20, 0.5, 5
+#                 )
 
-            A = []  # to suppress warning
-            for n in range(N_channels):
-                x_means[n] = np.nanmean(np.abs(x_filt[n, :]) ** 2)
+#             A = []  # to suppress warning
+#             for n in range(N_channels):
+#                 x_means[n] = np.nanmean(np.abs(x_filt[n, :]) ** 2)
 
-                if n == 0:
-                    A = [[x_means[n], ch_labels[ichannels[n]]]]
-                else:
-                    A.append([x_means[n], ch_labels[ichannels[n]]])
-            del x_filt
+#                 if n == 0:
+#                     A = [[x_means[n], ch_labels[ichannels[n]]]]
+#                 else:
+#                     A.append([x_means[n], ch_labels[ichannels[n]]])
+#             del x_filt
 
-            # 1/4 of the median channel energy
-            cut_off_left = np.median(x_means[ileft]) / 4
-            cut_off_right = np.median(x_means[iright]) / 4
+#             # 1/4 of the median channel energy
+#             cut_off_left = np.median(x_means[ileft]) / 4
+#             cut_off_right = np.median(x_means[iright]) / 4
 
-            ishort_left = np.array(np.where(x_means[ileft] < cut_off_left))
-            ishort_right = np.array(np.where(x_means[iright] < cut_off_right))
+#             ishort_left = np.array(np.where(x_means[ileft] < cut_off_left))
+#             ishort_right = np.array(np.where(x_means[iright] < cut_off_right))
 
-            ishort = np.hstack([ileft[ishort_left], iright[ishort_right]])
-            ishort = np.array(ichannels[ishort])
+#             ishort = np.hstack([ileft[ishort_left], iright[ishort_right]])
+#             ishort = np.array(ichannels[ishort])
 
-            if ishort.size != 0:
-                print(
-                    ":: remove channel (electrode coupling): %s\n" % ch_labels[ishort]
-                )
-                data[ch_labels[ishort][0]] = np.nan
-                irem_channel = np.append(irem_channel, ishort[0])
+#             if ishort.size != 0:
+#                 print(
+#                     ":: remove channel (electrode coupling): %s\n" % ch_labels[ishort]
+#                 )
+#                 data[ch_labels[ishort][0]] = np.nan
+#                 irem_channel = np.append(irem_channel, ishort[0])
 
-    # if DBverbose and len(A) > 0:
-    #    print(A)
+#     # if DBverbose and len(A) > 0:
+#     #    print(A)
 
-    ichannels = list(range(len(data.columns)))
-    ichannels = np.delete(ichannels, irem_channel)
+#     ichannels = list(range(len(data.columns)))
+#     ichannels = np.delete(ichannels, irem_channel)
 
-    # all other artefacts are on a channel-by-channel basis
+#     # all other artefacts are on a channel-by-channel basis
 
-    irem = np.array([])
+#     irem = np.array([])
 
-    amount_removed = np.zeros([1, 4])
-    ct = 0
+#     amount_removed = np.zeros([1, 4])
+#     ct = 0
 
-    for n in ichannels:
-        data[ch_labels[n]], tmpp = art_per_channel(
-            data[ch_labels[n]].to_numpy(), Fs, DBverbose
-        )
-        if ct == 0:
-            amount_removed[ct, :] = tmpp
-        else:
-            amount_removed = np.vstack((amount_removed, tmpp))
-        ct += 1
-        irem = np.append(irem, np.where(np.isnan(data[ch_labels[n]])))
-        if any(np.isinf(data[ch_labels[n]])):
-            data[ch_labels[n]][np.where(data[ch_labels[n]] == np.inf)[0]] = np.nan
+#     for n in ichannels:
+#         data[ch_labels[n]], tmpp = art_per_channel(
+#             data[ch_labels[n]].to_numpy(), Fs, DBverbose
+#         )
+#         if ct == 0:
+#             amount_removed[ct, :] = tmpp
+#         else:
+#             amount_removed = np.vstack((amount_removed, tmpp))
+#         ct += 1
+#         irem = np.append(irem, np.where(np.isnan(data[ch_labels[n]])))
+#         if any(np.isinf(data[ch_labels[n]])):
+#             data[ch_labels[n]][np.where(data[ch_labels[n]] == np.inf)[0]] = np.nan
 
-    # remove artefacts across all channels
+#     # remove artefacts across all channels
 
-    data.loc[np.unique(irem), ch_labels[ichannels]] = np.nan
+#     data.loc[np.unique(irem), ch_labels[ichannels]] = np.nan
 
-    out = list(np.max(amount_removed, axis=0))
-    if irem_channel.shape[0] != 0:
-        out.append(np.unique(ch_labels[irem_channel.astype(int)]))
-    else:
-        out.append("None removed")
+#     out = list(np.max(amount_removed, axis=0))
+#     if irem_channel.shape[0] != 0:
+#         out.append(np.unique(ch_labels[irem_channel.astype(int)]))
+#     else:
+#         out.append("None removed")
 
-    return data, out
+#     return data, out
 
 
 def LPF_zero_phase(pd_data, Fs):
