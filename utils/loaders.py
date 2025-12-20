@@ -356,6 +356,7 @@ class DettiEDFLoader(EEGLoader):
             if sourcer is None:
                 detti_bool = yes_no("Are these files from Detti et al.?")
                 sourcer = ["detti" if detti_bool else "unspecified"][0]
+                eeg_signal_obj.sourcer = sourcer  
             if sourcer == "detti":
                 self.add_flags(eeg_signal_obj)
             
