@@ -140,7 +140,7 @@ def choose_dir(text: str = "Select a directory:", parent=None) -> str:
     dialogue.destroy()
     return Path(directory_path) if directory_path else None
 
-def choose_channel(channels_list, parent=None):
+def choose_channel(channels_list, auto_select=False, parent=None):
     """
     Function to help user choose the channel they want to import.
 
@@ -150,6 +150,9 @@ def choose_channel(channels_list, parent=None):
     Output:
     - out_list (list): list in the form [a: str, b: int], where a is the name (in all uppercase) of the chosen channel and b is the index of a in channels_list
     """
+    if auto_select:
+        return [channels_list[0].upper(), 0]
+    
     out_list = None
     selected_index = tk.IntVar(value=-1)
     

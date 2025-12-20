@@ -69,7 +69,7 @@ def save_signal(eeg_signal_obj: object, file_path : path):
     with open(file_path, "wb") as f:
         pkl.dump(eeg_signal_obj, f, protocol=pkl.HIGHEST_PROTOCOL)
 
-def load_signal(choose: bool = False, file_path: path = None, file_name_bool = None) -> tuple[object, path]:
+def load_signal(choose: bool = False, file_path: path = None, file_name_bool = None, **kwargs) -> tuple[object, path]:
     """
     This method allows the user to choose a pickled signal file to load, then reconstructs and reutrns the signal.
 
@@ -113,7 +113,7 @@ def load_signal(choose: bool = False, file_path: path = None, file_name_bool = N
     for loader in AllLoaders._loaders: #loader is a class, not an instance
         if file_path.suffix in loader.get_supported_extensions():
             loader_inst = loader()
-            eeg_signal_obj = loader_inst.load(file_path)[0] #First in tuple is EEGSignal instance, second in tuple is file_path (which we already have)
+            eeg_signal_obj = loader_inst.load(file_path, **kwargs)[0] #First in tuple is EEGSignal instance, second in tuple is file_path (which we already have)
             my_ext = file_path.suffix
     file_name = path(file_path).stem
     object_name = eeg_signal_obj.name
