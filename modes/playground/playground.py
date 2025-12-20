@@ -32,6 +32,7 @@ class PlaygroundMode(Mode):
         self.display_time_lims = [] #Start and stop times when displaying data in SECONDS
         self.analyze_time_lims = [] #Start and stop times during analysis in SECONDS (will be useful for programatic analysis during only certain periods of the signal, since some metrics will be things like slope or mean)
         self.signal_dir = None #This will store the signal's current directory; the full path (with file name and extension) is handled by the setter signal_path below
+        self.min_clean_time = None #Minimum length of consecutive clean data needed to allow for processing (EEGFunctions or EEGAnalyzers)
         self.has_unsaved_changes = False #True when the signal has been changed but user hasn't saved
         self.view_timeseries = [] #List of TimeSeries to view
 
@@ -307,8 +308,10 @@ class PlaygroundMode(Mode):
         if self.current_signal is None:
             gui_utilities.simple_dialogue("You need to build or import a signal before you can make changes to it.")
             return
+        if self.min_clean_time is None:
+            self.min_clean_time = gui_utilities.text_entry("What is the minimum amount of consecutive clean signal you want to be considered for processing an analysis?")
         fxn, lims = self.get_functions()
-        self.current_signal = fxn.apply(self.current_signal, lims, flags_bool = True) #Also updates the object to have unsaved changes.
+        self.current_signal = fxn.apply(self.current_signal, lims, flags_bool = True, min_clean_length = self.min_clean_time) #Also updates the object to have unsaved changes.
         #Now, we need to re-run all our analyses on the new data
         analyzers = eeg_analyzers.AllAnalyzers._analyzers
         for analyzer in analyzers:
@@ -325,17 +328,19 @@ class PlaygroundMode(Mode):
         if self.current_signal is None:
             gui_utilities.simple_dialogue("You need to build or import a signal before you can make changes to it.")
             return
+        if self.min_clean_time is None:
+            self.min_clean_time = gui_utilities.text_entry("What is the minimum amount of consecutive clean signal you want to be considered for processing an analysis?")
         if analyzer_choice is None:
             analyzers = self.get_analyzer()
             for analyzer in analyzers:
                 analyzer_inst = analyzer()
                 # Remove existing time series with the same name if it exists (since we're about to update it)
                 self.current_signal.time_series = [ts for ts in self.current_signal.time_series if ts.name != analyzer_inst.name]
-                analyzer_inst.apply(self.current_signal) #This performs analysis, then creates and updates the TimeSeries object
+                analyzer_inst.apply(self.current_signal, min_clean_length = self.min_clean_time) #This performs analysis, then creates and updates the TimeSeries object
         else:
             analyzer_inst = analyzer_choice()
             self.current_signal.time_series = [ts for ts in self.current_signal.time_series if ts.name != analyzer_inst.name]
-            analyzer_inst.apply(self.current_signal) #This performs analysis, then creates and updates the TimeSeries object
+            analyzer_inst.apply(self.current_signal, ) #This performs analysis, then creates and updates the TimeSeries object
             analyzers = []
             
         self.update_display()
@@ -808,7 +813,7 @@ class PlaygroundMode(Mode):
             global_max_time = min(global_max_time, end_time)
 
         # Helper function to downsample data intelligently
-        def downsample_data(times, data, max_points=500):
+        def downsample_data(times, data, max_points=100):
             """
             Downsample data if it exceeds max_points while preserving visual features.
             Uses a min-max decimation approach to preserve peaks and troughs.

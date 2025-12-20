@@ -393,13 +393,15 @@ class art_reject(EEGFunction):
         'max_voltage': self.max_voltage,
         'max_jump': self.max_jump
         }
-        return art_per_channel(original_signal, eeg_object.srate, params)
+        modified_signal, amount_removed = art_per_channel(original_signal, eeg_object.srate, params)
+        return modified_signal
+
     
 class bandpass_filter(EEGFunction):
     name = "Bandpass Filter" #Required
     params_units_dict = {"lowpass": "Hz", "highpass": "Hz"} #Required
     
-    def __init__(self, lowcut=None, highcut=None, order: int = 4, **kwargs):
+    def __init__(self, lowpass=None, highpass=None, order: int = 4, **kwargs):
         """
         Initializes the bandpass_filter function.
         
