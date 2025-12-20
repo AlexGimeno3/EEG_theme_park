@@ -416,10 +416,10 @@ class bandpass_filter(EEGFunction):
         self.__dict__.update(params) #Leave unchanged
 
         #Edit quality checks
-        if self.lowcut is None or self.highcut is None:
-            raise ValueError("lowcut and highcut are required")
-        if self.lowcut >= self.highcut:
-            raise ValueError("lowcut must be less than highcut")
+        if self.lowpass is None or self.highpass is None:
+            raise ValueError("lowpass and highpass are required")
+        if self.lowpass >= self.highpass:
+            raise ValueError("lowpass must be less than highpass")
     
     def _apply_function(self, original_signal, eeg_object, **kwargs): #Edit
         """
@@ -434,10 +434,10 @@ class bandpass_filter(EEGFunction):
         """
         # Design the Butterworth bandpass filter
         nyquist = eeg_object.srate / 2
-        low = self.lowcut / nyquist
-        high = self.highcut / nyquist
-        if self.highcut >= eeg_object.srate / 2:
-            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
+        low = self.lowpass / nyquist
+        high = self.highpass / nyquist
+        if self.highpass >= eeg_object.srate / 2:
+            raise ValueError("highpass must be less than Nyquist frequency (srate/2)")
         b, a = butter(self.order, [low, high], btype='band')
         # Apply the filter using zero-phase filtering
         modified_signal = filtfilt(b, a, original_signal)

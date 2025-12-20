@@ -23,7 +23,7 @@ def build_pipeline():
     """
     
     # First, get minimum time from user
-    min_time_str = gui_utilities.text_entry("What is the minimum amount of time (in seconds) you want a segment to have to be analyzable?", default_value="20")
+    min_time_str = gui_utilities.text_entry("What is the minimum amount of time (in seconds) you want a segment to have to be analyzable?")
     # Handle if user cancelled
     if min_time_str is None:
         return None
