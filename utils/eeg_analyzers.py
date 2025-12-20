@@ -63,6 +63,8 @@ class EEGAnalyzer(ABC):
         Outputs:
         - eeg_object (EEGSignal instance): EEGObject after a TimeSeries has been added
         """
+        print(f"Calculating {self.name}...")
+        
         if self.name in [ts.name for ts in eeg_object.time_series]:
             return eeg_object  # Already computed
         
@@ -93,6 +95,13 @@ class EEGAnalyzer(ABC):
                     adj_end = min(len(analyze_data), end_idx - global_offset)
                     adjusted_segments.append((adj_start, adj_end))
             clean_segments = adjusted_segments
+        
+        if clean_segments is not None:
+            print(f"  Using {len(clean_segments)} clean segments")
+            total_clean = sum(end - start for start, end in clean_segments)
+            print(f"  Total clean samples: {total_clean} / {len(analyze_data)} ({100*total_clean/len(analyze_data):.1f}%)")
+        else:
+            print(f"  WARNING: clean_segments is None! Will process entire signal.")
         
         # Run analysis
         if clean_segments is None:
@@ -185,7 +194,7 @@ class Power8to10Hz(EEGAnalyzer):
     """
     name = "power_8_10_hz" #Edit to include the correct name
     units = "uV^2" #Edit to include the correct units
-    time_details = {"window_length":2, "advance_time":1} #Edit to perform windowing as you would like (currently, this means the function is applied to 2-second-long windows, advancing each time by 1 second [i.e., with 50% overlap])
+    time_details = {"window_length":30, "advance_time":15} #Edit to perform windowing as you would like (currently, this means the function is applied to 30-second-long windows, advancing each time by 15 second [i.e., with 50% overlap])
     
     def __init__(self, **kwargs): #Leave unchanged
         super().__init__(**kwargs) #Leave unchanged
@@ -226,9 +235,9 @@ class EdgeFrequency(EEGAnalyzer):
             #---------------------------------------
             srate = eeg_object.srate
             pass_params = {
-                "L_window" : self.time_details["window_length"], 
+                "L_window" : 2, 
                 "window_type" : "hamm", #Other option is "rect"; Hamming chosen to reduce spectral leakage
-                "overlap" : self.time_details["advance_time"]/self.time_details["window_length"]*100,
+                "overlap" : 50,
                 "method" : "periodogram",
                 "SEF" : 0.95, #spectral edge frequency threshold
                 "total_freq_bands" : [0.5, 30]  #Frequency range within which we are calculating SEF
