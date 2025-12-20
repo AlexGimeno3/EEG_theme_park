@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import inspect
 from eeg_theme_park.utils.gui_utilities import simple_dialogue
+from eeg_theme_park.utils.NEURAL_py_fork.preprocessing_EEG import art_per_channel
 import tkinter as tk
 from tkinter import ttk
 import copy
@@ -343,7 +344,7 @@ class art_reject(EEGFunction):
     params_units_dict = {"max_zero_length": "secs", "high_amp_collar": "secs", "jump_collar": "secs", "max_repeat_length":"secs", "max_voltage":"uV", "max_jump":"uV"} #Required
     
     
-    def __init__(self, max_zero_length=None, high_amp_collar=None, jump_collar=None, max_repeat_length=None, max_voltage=None, max_jump=None, **kwargs):
+    def __init__(self, srate = None, max_zero_length=1, high_amp_collar=10, jump_collar=0.5, max_repeat_length=0.1, max_voltage=1500, max_jump=200, **kwargs):
         """
         Initializes the function.
         
@@ -360,16 +361,22 @@ class art_reject(EEGFunction):
         self.__dict__.update(params) #Leave unchanged
 
         #Edit quality checks
-        if self.lowcut is None or self.highcut is None or self.srate is None:
-            raise ValueError("lowcut, highcut, and srate are required")
-        if self.lowcut >= self.highcut:
-            raise ValueError("lowcut must be less than highcut")
-        if self.highcut >= self.srate / 2:
-            raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
+        if self.max_voltage is None or self.max_voltage <= 0:
+            raise ValueError("max_voltage is required and must be positive")
+        if self.max_jump is None or self.max_jump <= 0:
+            raise ValueError("max_jump is required and must be positive")
+        if self.max_zero_length is None or self.max_zero_length <= 0:
+            raise ValueError("max_zero_length is required and must be positive")
+        if self.max_repeat_length is None or self.max_repeat_length <= 0:
+            raise ValueError("max_repeat_length is required and must be positive")
+        if self.high_amp_collar is None or self.high_amp_collar < 0:
+            raise ValueError("high_amp_collar is required and must be non-negative")
+        if self.jump_collar is None or self.jump_collar < 0:
+            raise ValueError("jump_collar is required and must be non-negative")
     
-    def _apply_function(self, original_signal, **kwargs): #Edit
+    def _apply_function(self, original_signal, **kwargs):
         """
-        Apply bandpass filter to a signal using a Butterworth filter.
+        Apply NEURAL_py single-channel artefact rejection.
         
         Inputs:
         - original_signal (numpy array): signal segment to modify
@@ -378,14 +385,15 @@ class art_reject(EEGFunction):
         Output:
         - modified_signal (numpy array): filtered signal
         """
-        # Design the Butterworth bandpass filter
-        nyquist = self.srate / 2
-        low = self.lowcut / nyquist
-        high = self.highcut / nyquist
-        b, a = butter(self.order, [low, high], btype='band')
-        # Apply the filter using zero-phase filtering
-        modified_signal = filtfilt(b, a, original_signal)
-        return modified_signal
+        params = {
+        'max_zero_length': self.max_zero_length,
+        'high_amp_collar': self.high_amp_collar,
+        'jump_collar': self.jump_collar,
+        'max_repeat_length': self.max_repeat_length,
+        'max_voltage': self.max_voltage,
+        'max_jump': self.max_jump
+        }
+        return art_per_channel(original_signal, self.srate,params)
     
 class bandpass_filter(EEGFunction):
     name = "Bandpass Filter" #Required
