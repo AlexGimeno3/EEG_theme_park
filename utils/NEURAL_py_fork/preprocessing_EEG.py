@@ -8,6 +8,7 @@ import numpy as np
 from eeg_theme_park.utils.NEURAL_py_fork import NEURAL_parameters
 from scipy import signal
 import mne
+from tqdm import tqdm
 
 
 def load_edf_EEG_file(file_name, channels_to_look=None):
@@ -178,7 +179,7 @@ def art_per_channel(x, Fs, params):
     ihigh = np.array(np.where(x_hilbert > thres_upper))[0]
 
     if ihigh.size != 0:
-        for p in range(len(ihigh)):
+        for p in tqdm(range(len(ihigh)), desc="Processing high-amplitude artefacts"):
             irun = np.array(
                 range((ihigh[p] - int(art_coll)), (ihigh[p] + int(art_coll) + 1), 1)
             )
@@ -226,7 +227,7 @@ def art_per_channel(x, Fs, params):
 
     ihigh = np.array(np.where(np.abs(x_diff) > params["max_jump"]))[0]
     if ihigh.size != 0:
-        for p in range(len(ihigh)):
+        for p in tqdm(range(len(ihigh)), desc="Finding sudden-jump artefacts"):
             irun = np.array(
                 range((ihigh[p] - int(art_coll)), (ihigh[p] + int(art_coll) + 1), 1)
             )
