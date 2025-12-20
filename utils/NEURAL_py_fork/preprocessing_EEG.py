@@ -150,7 +150,7 @@ def art_per_channel(x, Fs, params):
     x_channel[np.where(x_channel != 0)] = 1
     irem = np.zeros([N])
     lens, istart, iend = utils.len_cont_zeros(x_channel, 0)
-    ielec = np.array(np.where(lens >= (params["ART_ELEC_CHECK"] * Fs)))[0]
+    ielec = np.array(np.where(lens >= (params["max_zero_length"] * Fs)))[0]
 
     if ielec.size != 0:
         for m in ielec:
@@ -169,12 +169,12 @@ def art_per_channel(x, Fs, params):
     # ---------------------------------------------------------------------
     # 2. high - amplitude artefacts
     # ---------------------------------------------------------------------
-    art_coll = params["ART_TIME_COLLAR"] * Fs
+    art_coll = params["high_amp_collar"] * Fs
     irem = np.zeros(N)
 
     x_hilbert = np.abs(signal.hilbert(x_filt))
 
-    thres_upper = params["ART_HIGH_VOLT"]
+    thres_upper = params["max_voltage"]
     ihigh = np.array(np.where(x_hilbert > thres_upper))[0]
 
     if ihigh.size != 0:
@@ -193,7 +193,7 @@ def art_per_channel(x, Fs, params):
     # ---------------------------------------------------------------------
     # 3. continuous constant values(i.e.artefacts)
     # ---------------------------------------------------------------------
-    art_coll = params["ART_DIFF_TIME_COLLAR"] * Fs
+    art_coll = params["jump_collar"] * Fs
     irem = np.zeros(N)
 
     x_diff_all = np.concatenate((np.diff(x), [0]))
@@ -202,7 +202,7 @@ def art_per_channel(x, Fs, params):
     lens, istart, iend = utils.len_cont_zeros(x_diff, 0)
 
     # if exactly constant for longer than.then remove:
-    ielec = np.array(np.where(lens > (params["ART_DIFF_MIN_TIME"] * Fs)))[0]
+    ielec = np.array(np.where(lens > (params["max_repeat_length"] * Fs)))[0]
 
     if ielec.size != 0:
         for m in ielec:
@@ -220,11 +220,11 @@ def art_per_channel(x, Fs, params):
     # ---------------------------------------------------------------------
     # 4. sudden jumps in amplitudes or constant values(i.e.artefacts)
     # ---------------------------------------------------------------------
-    art_coll = params["ART_DIFF_TIME_COLLAR"] * Fs
+    art_coll = params["jump_collar"] * Fs
     irem = np.zeros(N)
     x_diff = x_diff_all.copy()
 
-    ihigh = np.array(np.where(np.abs(x_diff) > params["ART_DIFF_VOLT"]))[0]
+    ihigh = np.array(np.where(np.abs(x_diff) > params["max_jump"]))[0]
     if ihigh.size != 0:
         for p in range(len(ihigh)):
             irun = np.array(
