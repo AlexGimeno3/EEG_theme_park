@@ -262,10 +262,10 @@ class BatchProcessing(Mode):
             try:
                 eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=self.channel_name, sourcer = self.sourcer)[0]
                 id = eeg_signal.name
-                if not eeg_signal.channel is None:
-                    channel_name = eeg_signal.channel
-                if not sourcer is None:
-                    sourcer = eeg_signal.sourcer
+                if eeg_signal.channel is not None:
+                    self.channel_name = eeg_signal.channel
+                if eeg_signal.sourcer is not None:
+                    self.sourcer = eeg_signal.sourcer
 
                 # Add flag information based on mode
                 if self.use_existing_flags and self.existing_flag_names is not None:
@@ -307,13 +307,14 @@ class BatchProcessing(Mode):
                 # Capture the full traceback for debugging
                 import traceback
                 full_error = traceback.format_exc()
-                error_message = f"{str(e)}\n\nFull traceback:\n{full_error}"
+                # Print to console
                 print(f"Error processing {id}:")
-                print(full_error)  # Print to console for debugging
-                
-                # Add to errors DataFrame
-                error_row = {'ID': id, 'Error_name': str(e)}
+                print(full_error)
+                # Add full traceback to errors DataFrame (not just the error message)
+                error_row = {'ID': id, 'Error_name': full_error}
                 self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
+                # Also add to analysis log
+                self.analysis_log += f"\n{'='*60}\nError processing {id}:\n{full_error}\n{'='*60}\n"
                 continue  # Skip to next file
 
             if dicts_arr is not None:
