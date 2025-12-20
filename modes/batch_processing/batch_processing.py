@@ -28,6 +28,8 @@ class BatchProcessing(Mode):
         self.files_dir = kwargs.get("files_dir", None)
         if self.files_dir is not None:
             self.files_dir = Path(self.files_dir)
+        self.channel_name = None #Channel we are analyzing
+        self.sourcer = None #source marker for loading files
         self.events_excel_path = kwargs.get("excel_path", None)
         self.excel_path = self.events_excel_path
         self.event_names = kwargs.get("event_names", None)
@@ -164,7 +166,11 @@ class BatchProcessing(Mode):
             if self.files_dir is not None and hasattr(self, 'names_list') and len(self.names_list) > 0:
                 try:
                     first_file = self.names_list[0]
-                    eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True, auto_select_channel = True)[0]
+                    eeg_signal = playground.file_commands.load_signal(file_path=first_file, file_name_bool=True, channel_name = self.channel_name, sourcer=self.sourcer, auto_select_channel = False)[0]
+                    if eeg_signal.channel is not None:
+                        self.channel_name = eeg_signal.channel
+                    if eeg_signal.sourcer is not None:
+                        self.sourcer = eeg_signal.sourcer
                     # Extract unique flag names from the flags dictionary
                     if hasattr(eeg_signal, 'flags') and eeg_signal.flags:
                         available_flags = list(eeg_signal.flags.keys())
@@ -253,49 +259,63 @@ class BatchProcessing(Mode):
         channel_name = None
         sourcer = None
         for path in self.names_list:
-            eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=channel_name, sourcer = sourcer)[0]
-            id = eeg_signal.name
-            if not eeg_signal.channel is None:
-                channel_name = eeg_signal.channel
-            if not sourcer is None:
-                sourcer = eeg_signal.sourcer
+            try:
+                eeg_signal = playground.file_commands.load_signal(file_path=path, file_name_bool=True, channel=self.channel_name, sourcer = self.sourcer)[0]
+                id = eeg_signal.name
+                if not eeg_signal.channel is None:
+                    channel_name = eeg_signal.channel
+                if not sourcer is None:
+                    sourcer = eeg_signal.sourcer
 
-            # Add flag information based on mode
-            if self.use_existing_flags and self.existing_flag_names is not None:
-                for flag_name in self.existing_flag_names:
-                    # Normalize flag name (capitalize first letter)
-                    normalized_name = flag_name[0].upper() + flag_name[1:] if flag_name else flag_name
-                    
-                    # Check if flag exists in the signal
-                    if normalized_name in eeg_signal.flags:
-                        flag_data = eeg_signal.flags[normalized_name]
+                # Add flag information based on mode
+                if self.use_existing_flags and self.existing_flag_names is not None:
+                    for flag_name in self.existing_flag_names:
+                        # Normalize flag name (capitalize first letter)
+                        normalized_name = flag_name[0].upper() + flag_name[1:] if flag_name else flag_name
                         
-                        # Handle both single-point and duration flags
-                        if len(flag_data) >= 2:
-                            # Duration flag (has start and end times)
-                            flag_times = flag_data[:2]
-                            eeg_signal.analyze_time_limits = flag_times
+                        # Check if flag exists in the signal
+                        if normalized_name in eeg_signal.flags:
+                            flag_data = eeg_signal.flags[normalized_name]
+                            
+                            # Handle both single-point and duration flags
+                            if len(flag_data) >= 2:
+                                # Duration flag (has start and end times)
+                                flag_times = flag_data[:2]
+                                eeg_signal.analyze_time_limits = flag_times
+                            else:
+                                # Single-point flag - log warning and skip
+                                error_msg = f"Flag '{normalized_name}' is a single-point flag, cannot set analysis limits"
+                                self.analysis_log += f"[{id}] {error_msg}\n"
+                                continue
                         else:
-                            # Single-point flag - log warning and skip
-                            error_msg = f"Flag '{normalized_name}' is a single-point flag, cannot set analysis limits"
+                            # Flag not found - log error and skip this file
+                            error_msg = f"Flag '{normalized_name}' not found in signal. Available flags: {list(eeg_signal.flags.keys())}"
+                            error_row = {'ID': id, 'Error_name': error_msg}
+                            self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
                             self.analysis_log += f"[{id}] {error_msg}\n"
                             continue
-                    else:
-                        # Flag not found - log error and skip this file
-                        error_msg = f"Flag '{normalized_name}' not found in signal. Available flags: {list(eeg_signal.flags.keys())}"
-                        error_row = {'ID': id, 'Error_name': error_msg}
-                        self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
-                        self.analysis_log += f"[{id}] {error_msg}\n"
-                        continue
-                        
-            elif self.excel_path is not None and self.event_names is not None:
-                flag_times = get_flag_times(self.excel_path, id, self.event_names)
-                flag_times = eeg_signal.get_real_time_window(flag_times)
-                eeg_signal.add_flag("Analyzed event", flag_times, shade=True)
-                eeg_signal.analyze_time_limits = flag_times
-            
-            # Run the pipeline
-            dicts_arr, error_message = self.pipeline.run_pipeline(eeg_signal)
+                            
+                elif self.excel_path is not None and self.event_names is not None:
+                    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                    flag_times = eeg_signal.get_real_time_window(flag_times)
+                    eeg_signal.add_flag("Analyzed event", flag_times, shade=True)
+                    eeg_signal.analyze_time_limits = flag_times
+                
+                # Run the pipeline
+                dicts_arr, error_message = self.pipeline.run_pipeline(eeg_signal)
+            except Exception as e:
+                # Capture the full traceback for debugging
+                import traceback
+                full_error = traceback.format_exc()
+                error_message = f"{str(e)}\n\nFull traceback:\n{full_error}"
+                print(f"Error processing {id}:")
+                print(full_error)  # Print to console for debugging
+                
+                # Add to errors DataFrame
+                error_row = {'ID': id, 'Error_name': str(e)}
+                self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
+                continue  # Skip to next file
+
             if dicts_arr is not None:
                 # Transform the array of dicts into a single row
                 row_data = {'ID': id}

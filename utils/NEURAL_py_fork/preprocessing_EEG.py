@@ -134,12 +134,13 @@ def art_per_channel(x, Fs, params):
         "max_jump":"ART_DIFF_VOLT" #Maximum voltage difference (in uV) allowed between consecutive values before signal is considered artefact
     }
 
-    
+    default_params = NEURAL_parameters.NEURAL_parameters()  
+
     #Intialize function
     needed_params = [val for val in eegtp_to_neural_dict.keys()]
     for param in needed_params:
         if param not in params.keys():
-            params[param] = NEURAL_parameters[eegtp_to_neural_dict[param]]
+            params[param] = default_params[eegtp_to_neural_dict[param]]
 
     amount_removed = np.array([0, 0, 0, 0], dtype=float)
     # ---------------------------------------------------------------------
