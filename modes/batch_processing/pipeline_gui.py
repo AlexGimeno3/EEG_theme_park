@@ -21,6 +21,19 @@ def build_pipeline():
     Output:
     - final_pipeline (Pipeline object): the final pipeline the user has created
     """
+    
+    # First, get minimum time from user
+    min_time_str = gui_utilities.text_entry("What is the minimum amount of time (in seconds) you want a segment to have to be analyzable?", default_value="20")
+    # Handle if user cancelled
+    if min_time_str is None:
+        return None
+    # Convert to float
+    try:
+        min_time = float(min_time_str)
+    except ValueError:
+        gui_utilities.simple_dialogue("Invalid minimum time value. Please enter a number.")
+        return None
+    
     # Get all functions and analyzers
     all_functions = copy.deepcopy(signal_functions.AllFunctions._functions)
     fxn_names = [fxn.name for fxn in all_functions]
@@ -217,7 +230,7 @@ def build_pipeline():
         fin_blocks = [entry[1] for entry in cp_entries]
         
         # Create Pipeline object
-        final_pipeline['result'] = pipeline.Pipeline(fin_blocks)
+        final_pipeline['result'] = pipeline.Pipeline(fin_blocks, min_clean_length = min_time)
         
         window.destroy()
     
