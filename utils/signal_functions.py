@@ -79,14 +79,14 @@ class EEGFunction(ABC):
                 # Process each clean segment
                 for seg_start, seg_end in clean_segments:
                     segment_data = data_to_process[seg_start:seg_end]
-                    processed_segment = self._apply_function(segment_data)
+                    processed_segment = self._apply_function(segment_data, eeg_object)
                     processed_data[seg_start:seg_end] = processed_segment
                 
                 eeg_object.data[start_idx:end_idx+1] = processed_data     
         
         else: # No clean segment filtering
             data_to_process = eeg_object.data[start_idx:end_idx+1]
-            edited_data = self._apply_function(data_to_process)
+            edited_data = self._apply_function(data_to_process, eeg_object)
             eeg_object.data[start_idx:end_idx+1] = edited_data
         
         if flags_bool:
@@ -97,12 +97,13 @@ class EEGFunction(ABC):
 
     
     @abstractmethod
-    def _apply_function(self, original_signal, **kwargs):
+    def _apply_function(self, original_signal, eeg_object, **kwargs):
         """
         Abstract method that must be used when creating a new function. Sublclasses should contain all the code that modifies the signal.
 
         Inputs:
         - original_signal (list of int): the original signal (in uV) that we would like to modify
+        - eeg_object (EEGSignal object): the EEG signal object from which we may want to pull data (e.g., sampling rate)
 
         Output:
         - modified_signal (list of int): the modified signal (in uV) after the function has been applied
@@ -275,7 +276,7 @@ class example_function(EEGFunction): #change example_function name
         params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')}
         super().__init__(**params, **kwargs)
         self.__dict__.update(params)
-    def _apply_function(self, original_signal, **kwargs):
+    def _apply_function(self, original_signal, eeg_object, **kwargs):
         #original_signal will contain a list of data points WITHOUT time data
         #access arguments/parameters as self.arg_1
         #add logic
@@ -287,7 +288,7 @@ class add_power(EEGFunction):
     name = "Add power"
     params_units_dict = {"frequency":"Hz", "amplitude":"uV", "phase":"radians", "final_amplitude":"uV"}
 
-    def __init__(self, frequency =None, amplitude =None, phase: float = 0, final_amplitude = None, stdev = None, srate = None, **kwargs):
+    def __init__(self, frequency =None, amplitude =None, phase: float = 0, final_amplitude = None, stdev = None, **kwargs):
         """"
         Initializes the add_power function.
 
@@ -297,7 +298,6 @@ class add_power(EEGFunction):
         - phase (float): phase offset (radians)
         - final_amplitude (float): final amplitude of oscillation to add if you want amplitude to vary linearly over time
         - stdev (float): if not None, this will introduce randomness into the amplitude at each point in line with STDEV
-        - srate (float): sampling rate of our signal (Hz)
         - **additional parameters passed to parent
         """
         params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')}
@@ -307,7 +307,7 @@ class add_power(EEGFunction):
         if self.frequency is None or self.amplitude is None or self.srate is None:
             raise ValueError("frequency, amplitude, and srate are required")
     
-    def _apply_function(self, original_signal, **kwargs):
+    def _apply_function(self, original_signal, eeg_object, **kwargs):
         """
         Add oscillatory power to a signal.
 
@@ -315,7 +315,7 @@ class add_power(EEGFunction):
         - original_signal (numpy array): signal segment to modify
         - **kwargs: other signals
         """
-        srate = self.srate
+        srate = eeg_object.srate
         n_samples = len(original_signal)
         t = np.arange(n_samples) / srate
 
@@ -374,7 +374,7 @@ class art_reject(EEGFunction):
         if self.jump_collar is None or self.jump_collar < 0:
             raise ValueError("jump_collar is required and must be non-negative")
     
-    def _apply_function(self, original_signal, **kwargs):
+    def _apply_function(self, original_signal, eeg_object, **kwargs):
         """
         Apply NEURAL_py single-channel artefact rejection.
         
@@ -393,20 +393,19 @@ class art_reject(EEGFunction):
         'max_voltage': self.max_voltage,
         'max_jump': self.max_jump
         }
-        return art_per_channel(original_signal, self.srate,params)
+        return art_per_channel(original_signal, eeg_object.srate, params)
     
 class bandpass_filter(EEGFunction):
     name = "Bandpass Filter" #Required
-    params_units_dict = {"lowpass": "Hz", "highpass": "Hz", "srate": "Hz"} #Required
+    params_units_dict = {"lowpass": "Hz", "highpass": "Hz"} #Required
     
-    def __init__(self, lowcut=None, highcut=None, srate=None, order: int = 4, **kwargs):
+    def __init__(self, lowcut=None, highcut=None, order: int = 4, **kwargs):
         """
         Initializes the bandpass_filter function.
         
         Inputs:
         - lowpass (float): low frequency cutoff for the bandpass filter (Hz)
         - highpass (float): high frequency cutoff for the bandpass filter (Hz)
-        - srate (float): sampling rate of the signal (Hz)
         - order (int): filter order (default 4)
         - **kwargs: additional parameters passed to parent
         """
@@ -422,7 +421,7 @@ class bandpass_filter(EEGFunction):
         if self.highcut >= self.srate / 2:
             raise ValueError("highcut must be less than Nyquist frequency (srate/2)")
     
-    def _apply_function(self, original_signal, **kwargs): #Edit
+    def _apply_function(self, original_signal, eeg_object, **kwargs): #Edit
         """
         Apply bandpass filter to a signal using a Butterworth filter.
         
@@ -434,7 +433,7 @@ class bandpass_filter(EEGFunction):
         - modified_signal (numpy array): filtered signal
         """
         # Design the Butterworth bandpass filter
-        nyquist = self.srate / 2
+        nyquist = eeg_object.srate / 2
         low = self.lowcut / nyquist
         high = self.highcut / nyquist
         b, a = butter(self.order, [low, high], btype='band')
