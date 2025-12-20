@@ -8,6 +8,37 @@ import numpy as np
 """
 File containing the Pipeline class, which is used to create exportable and loadable EEG processing pipelines between users.
 """
+
+def find_clean_segments(data, srate, min_length_sec):
+    """
+    Find all contiguous non-NaN segments in data that are >= min_length_sec.
+    
+    Inputs:
+    - data (numpy array): signal data that may contain NaN values
+    - srate (float): sampling rate in Hz
+    - min_length_sec (float): minimum segment length in seconds
+    
+    Outputs:
+    - clean_segments (list of tuples): [(start_idx, end_idx), ...] where each tuple
+      represents a clean segment with end_idx being exclusive (Python slice convention)
+    """
+    is_valid = ~np.isnan(data)
+    
+    # Find transitions between valid and invalid data
+    # Pad with False to catch segments at start/end
+    transitions = np.diff(np.concatenate(([False], is_valid, [False])).astype(int))
+    starts = np.where(transitions == 1)[0]
+    ends = np.where(transitions == -1)[0]
+    
+    min_samples = int(min_length_sec * srate)
+    
+    clean_segments = []
+    for start, end in zip(starts, ends):
+        if (end - start) >= min_samples:
+            clean_segments.append((start, end))
+    
+    return clean_segments
+
 class Pipeline:
     """
     Pipeline class. This is a class that contains all the steps to take data from raw EEG files to a final Excel.
@@ -19,12 +50,13 @@ class Pipeline:
         {'key': 'mann_kendall_tau', 'suffix': 'MKT', 'unit_transform': lambda u: ""}  # No units for MKT
     ]
     
-    def __init__(self, operations):
+    def __init__(self, operations, min_clean_length = 0):
         """
         Inputs:
         - operations (arr of EEGFunction or EEGAnalyzer subclasses): sequantial array of operations that will be applied to code one-by-one
         """
         self.operations = operations
+        self.min_clean_length = min_clean_length
         self.pipeline_log = ""
         self.ever_run = False
 
@@ -88,58 +120,82 @@ class Pipeline:
         id = eeg_signal.name
 
         try:
+            functions = [op for op in self.operations if isinstance(op, EEGFunction)]
+            analyzers = [op for op in self.operations if isinstance(op, EEGAnalyzer)]
+
+            # Step 1: Apply all EEGFunctions. NB: the apply subclass forces the minimum length with each consecutive function.
+            for func in functions:
+                eeg_signal = func.apply(eeg_signal, time_range=None, min_clean_length=self.min_clean_length)
+                if not self.ever_run:
+                    self.pipeline_log += f"\nApplied function {func.name} with specs {func.args_dict}"
+            
+            # Step 2: After all functions, find final clean segments and mark short ones as NaN
+            clean_segments = None
+            if self.min_clean_length > 0:
+                clean_segments = find_clean_segments(eeg_signal.data, eeg_signal.srate, self.min_clean_length)
+                
+                # Mark all data NOT in clean segments as NaN
+                mask = np.ones(len(eeg_signal.data), dtype=bool)
+                for start, end in clean_segments:
+                    mask[start:end] = False
+                eeg_signal.data[mask] = np.nan
+                
+                # Calculate statistics for logging
+                total_samples = len(eeg_signal.data)
+                clean_samples = sum(end - start for start, end in clean_segments)
+                clean_pct = 100 * clean_samples / total_samples if total_samples > 0 else 0
+                
+                if not self.ever_run:
+                    self.pipeline_log += (
+                        f"\n\nClean segment analysis (min length = {self.min_clean_length}s):"
+                        f"\n  - Found {len(clean_segments)} clean segments"
+                        f"\n  - Clean data: {clean_pct:.1f}% of signal"
+                        f"\n  - Marked segments shorter than {self.min_clean_length}s as NaN"
+                    )
+            
+            # Step 3: Apply all EEGAnalyzers (pass clean_segments)
             results_arr = []
-            for op in self.operations:
-                if isinstance(op, EEGFunction): #Apply function to whole signal
-                    eeg_signal = op.apply(eeg_signal, time_range=None)  # This applies the function to the whole signal
-                    if not self.ever_run:
-                        self.pipeline_log += f"\nApplied the function {op.name} with specs {op.args_dict}"
-                elif isinstance(op, EEGAnalyzer): #Apply function to eeg_signal
-                    eeg_signal = op.apply(eeg_signal)
-                    my_ts_data = np.array(eeg_signal.time_series[-1].values)
-                    my_ts_times = np.array(eeg_signal.time_series[-1].times)
-                    
-                    # Drop all NaN values in my_ts_data as well as their respective indices/time points in my_ts_times
-                    mask = ~np.isnan(my_ts_data)
-                    my_ts_data = my_ts_data[mask]
-                    my_ts_times = my_ts_times[mask]
-                    
-                    # Calculate median
+            for analyzer in analyzers:
+                eeg_signal = analyzer.apply(eeg_signal, clean_segments=clean_segments)
+                
+                my_ts_data = np.array(eeg_signal.time_series[-1].values)
+                my_ts_times = np.array(eeg_signal.time_series[-1].times)
+                
+                mask = ~np.isnan(my_ts_data)
+                my_ts_data = my_ts_data[mask]
+                my_ts_times = my_ts_times[mask]
+                
+                if len(my_ts_data) > 0:
                     median_val = np.median(my_ts_data)
-                    
-                    # Calculate IQR (interquartile range)
                     q75, q25 = np.percentile(my_ts_data, [75, 25])
                     iqr_val = q75 - q25
-                    
-                    # Calculate Theil-Sen slope (robust linear regression slope)
-                    # This accounts for non-equally spaced time points
                     tss_result = theilslopes(my_ts_data, my_ts_times)
-                    TSS_val = tss_result[0]  # The slope estimate
-                    
-                    # Calculate Mann-Kendall tau value
-                    # This is a measure of monotonic trend
+                    TSS_val = tss_result[0]
                     mkt_result = kendalltau(my_ts_times, my_ts_data)
-                    mkt_val = mkt_result.correlation  # Kendall's tau correlation coefficient
-                    
-                    # Store results (you can modify this structure as needed)
-                    result_dict = {
-                        'analyzer_name': op.name,
-                        'median': median_val,
-                        'iqr': iqr_val,
-                        'theil_sen_slope': TSS_val,
-                        'mann_kendall_tau': mkt_val
-                    }
-                    results_arr.append(result_dict)
-                    if not self.ever_run:
-                        self.pipeline_log += f"\nApplied the function {op.name} with specs {op.args_dict}"
+                    mkt_val = mkt_result.correlation
                 else:
-                    raise ValueError(f"The operation in the pipeline was neither an EEGFunction subclass nor an EEGAnalyzer subclass. Double-check where you got your pipeline from.")
+                    median_val = np.nan
+                    iqr_val = np.nan
+                    TSS_val = np.nan
+                    mkt_val = np.nan
+                
+                result_dict = {
+                    'analyzer_name': analyzer.name,
+                    'median': median_val,
+                    'iqr': iqr_val,
+                    'theil_sen_slope': TSS_val,
+                    'mann_kendall_tau': mkt_val
+                }
+                results_arr.append(result_dict)
+                
+                if not self.ever_run:
+                    self.pipeline_log += f"\nApplied analyzer {analyzer.name} with specs {analyzer.args_dict}"
+        
         except Exception as e:
             error_message = f"Error processing {id}: {str(e)}"
             print(error_message)
             return None, error_message
         
-        # If successful, return results and no error
         del eeg_signal
         self.ever_run = True
         return results_arr, None

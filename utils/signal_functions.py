@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import inspect
 from eeg_theme_park.utils.gui_utilities import simple_dialogue
+from eeg_theme_park.utils.pipeline import find_clean_segments
 import tkinter as tk
 from tkinter import ttk
 import copy
@@ -45,14 +46,15 @@ class EEGFunction(ABC):
         super().__init_subclass__(**kwargs)
         AllFunctions.add_to_functions(cls)
     
-    def apply(self, eeg_object, time_range=None, flags_bool=True):
+    def apply(self, eeg_object, time_range=None, flags_bool=True, min_clean_length = 0):
         """
         Template method to apply the given function to a signal. Done so certain internal processes are always carried out. Sublclasses should contain all the code that modifies the signal, but does not need to log (this is handled internally by the EEGSignal object).
 
         Inputs:
         - eeg_object (EEGSignal object): EEGSignal object that 
         - time_range (list): time range in seconds over which to apply the function (NB: this is indexed to the actual time values of this signal, not to zero). If none, defaults to the entire signal
-        - flags_bool (bool): if True, will add to the EEGSignal.flags dictionary the flags we need 
+        - flags_bool (bool): if True, will add to the EEGSignal.flags dictionary the flags we need
+        - min_clean_length (float): minimum length (in seconds) of clean segments to process. Segments shorter than this will be marked as NaN. 
 
         Output:
         - eeg_object (EEGSignal object): EEGSignal object after our change has been applied
@@ -62,17 +64,34 @@ class EEGFunction(ABC):
         try: # Get the indices corresponding to the time range; raise exception if an error occurs
             start_idx = eeg_object.time_to_index(time_range[0])
             end_idx = eeg_object.time_to_index(time_range[1])
-            data_to_alter = eeg_object.data[start_idx:end_idx+1]
         except Exception as e:
             raise type(e)(f"{str(e)}; the time range you asked to apply the function to was {time_range[0]}-{time_range[1]} secs, but the signal only goes from {eeg_object.start_time} to {eeg_object.end_time} secs.") from e
 
-        edited_data = self._apply_function(data_to_alter) #Apply the fxn
-
-        #Other processing we always want to happen here
-        eeg_object.data[start_idx:end_idx+1] = edited_data
+        if min_clean_length > 0: #Perform cleaning of too-short segments
+                data_to_process = eeg_object.data[start_idx:end_idx+1]
+                # Find clean segments within this data
+                clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
+                
+                # Create output array (initialize with NaN)
+                processed_data = np.full_like(data_to_process, np.nan)
+                
+                # Process each clean segment
+                for seg_start, seg_end in clean_segments:
+                    segment_data = data_to_process[seg_start:seg_end]
+                    processed_segment = self._apply_function(segment_data)
+                    processed_data[seg_start:seg_end] = processed_segment
+                
+                eeg_object.data[start_idx:end_idx+1] = processed_data     
+        
+        else: # No clean segment filtering
+            data_to_process = eeg_object.data[start_idx:end_idx+1]
+            edited_data = self._apply_function(data_to_process)
+            eeg_object.data[start_idx:end_idx+1] = edited_data
+        
         if flags_bool:
             eeg_object.add_flag(self.name, copy.deepcopy(time_range))
         eeg_object.has_unsaved_changes = True
+        
         return eeg_object
 
     

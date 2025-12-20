@@ -51,12 +51,14 @@ class EEGAnalyzer(ABC):
         super().__init_subclass__(**kwargs)
         AllAnalyzers.add_to_analyzers(cls)
     
-    def apply(self, eeg_object, keep_fxn = True):
+    def apply(self, eeg_object, keep_fxn=True, clean_segments=None):
         """
-        Concrete method that 
+        Concrete method that applies the analyzer to EEG data.
+        
         Inputs:
         - eeg_object (EEGSignal instance): the EEGSignal instance we are analyzing
-        - keep_fxn (boolean): if true, will keep the instance of the instantiated subclass saved in the generated TimeSeries object; this can allow for better reproducability but is a bit harder on memory
+        - keep_fxn (boolean): if true, will keep the instance in TimeSeries object
+        - clean_segments (list of tuples or None): list of (start_idx, end_idx) tuples. If provided, only windows fully contained within these segments will be analyzed.
         
         Outputs:
         - eeg_object (EEGSignal instance): EEGObject after a TimeSeries has been added
@@ -64,35 +66,74 @@ class EEGAnalyzer(ABC):
         if self.name in [ts.name for ts in eeg_object.time_series]:
             return eeg_object  # Already computed
         
-        #Initialize
         srate = eeg_object.srate
-        n_window_samples = int(self.time_details["window_length"]*srate) #Leave untouched
-        n_step_samples = int(self.time_details["advance_time"]*srate) #Leave untouched
+        n_window_samples = int(self.time_details["window_length"] * srate)
+        n_step_samples = int(self.time_details["advance_time"] * srate)
         ts_values = []
         ts_times = []
-        #Get appropriate time range to analyze
+        
+        # Get appropriate time range to analyze
         if len(eeg_object.analyze_time_lims) > 0:
             start_time_i = eeg_object.time_to_index(eeg_object.analyze_time_lims[0])
             end_time_i = eeg_object.time_to_index(eeg_object.analyze_time_lims[1])
             analyze_data = eeg_object.data[start_time_i:end_time_i]
             analyze_times = eeg_object.times[start_time_i:end_time_i]
+            global_offset = start_time_i
         else:
             analyze_data = eeg_object.data
             analyze_times = eeg_object.times
-        #Run our analysis
-        for start_i in tqdm(range(0,len(analyze_data)-n_window_samples+1,n_step_samples)):
-            end_i = start_i + n_window_samples
-            window_signal = analyze_data[start_i:end_i] #NB: this is just a square window
-            window_val = self._apply_function(window_signal,eeg_object)
-            ts_values.append(window_val)
-            ts_times.append(analyze_times[start_i]) #Measurement at start of the window
+            global_offset = 0
+        
+        # Adjust clean segments to analyze window
+        if clean_segments is not None:
+            adjusted_segments = []
+            for start_idx, end_idx in clean_segments:
+                if start_idx < global_offset + len(analyze_data) and end_idx > global_offset:
+                    adj_start = max(0, start_idx - global_offset)
+                    adj_end = min(len(analyze_data), end_idx - global_offset)
+                    adjusted_segments.append((adj_start, adj_end))
+            clean_segments = adjusted_segments
+        
+        # Run analysis
+        if clean_segments is None:
+            # No clean segment filtering - analyze all windows
+            for start_i in tqdm(range(0, len(analyze_data) - n_window_samples + 1, n_step_samples)):
+                end_i = start_i + n_window_samples
+                window_signal = analyze_data[start_i:end_i]
+                
+                # Skip windows with any NaN values
+                if np.any(np.isnan(window_signal)):
+                    continue
+                
+                window_val = self._apply_function(window_signal, eeg_object)
+                ts_values.append(window_val)
+                ts_times.append(analyze_times[start_i])
+        else:
+            # Only analyze windows fully contained within clean segments
+            for seg_start, seg_end in clean_segments:
+                for start_i in range(seg_start, seg_end - n_window_samples + 1, n_step_samples):
+                    end_i = start_i + n_window_samples
+                    
+                    # Ensure window is fully within this clean segment
+                    if end_i > seg_end:
+                        break
+                    
+                    window_signal = analyze_data[start_i:end_i]
+                    
+                    # Double-check no NaN values
+                    if np.any(np.isnan(window_signal)):
+                        continue
+                    
+                    window_val = self._apply_function(window_signal, eeg_object)
+                    ts_values.append(window_val)
+                    ts_times.append(analyze_times[start_i])
         
         params_dict = {
-            "name" : self.name,
-            "values" : ts_values,
-            "units" : self.units,
-            "times" : ts_times,
-            "function" : self if keep_fxn else None
+            "name": self.name,
+            "values": ts_values,
+            "units": self.units,
+            "times": ts_times,
+            "function": self if keep_fxn else None
         }
 
         new_ts = TimeSeries(**params_dict)

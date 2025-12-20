@@ -3,10 +3,9 @@
 # Last updated: <25/07/2022 16:40:13 (BrianM)>
 
 import pandas as pd
-from NEURAL_py_EEG import utils
+from eeg_theme_park.utils.NEURAL_py_fork import utils
 import numpy as np
-from NEURAL_py_EEG import NEURAL_parameters
-from NEURAL_py_EEG.connectivity_features import channel_hemispheres
+from eeg_theme_park.utils.NEURAL_py_fork import NEURAL_parameters
 from scipy import signal
 import mne
 
