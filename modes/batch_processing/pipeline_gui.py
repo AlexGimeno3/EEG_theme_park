@@ -202,6 +202,17 @@ def build_pipeline():
             if not should_continue:
                 return
         
+        # Validate that no EEGFunction comes after an EEGAnalyzer
+        seen_analyzer = False
+        for name, instance in cp_entries:
+            # Check if this is an analyzer
+            if name in analyzer_dict:
+                seen_analyzer = True
+            # Check if this is a function but we've already seen an analyzer
+            elif name in fxn_dict and seen_analyzer:
+                gui_utilities.simple_dialogue("Invalid pipeline: Transform Signal functions cannot come after Analyze Signal analyzers. Please reorder your pipeline.")
+                return
+        
         # Extract just the instances (not names) from cp_entries
         fin_blocks = [entry[1] for entry in cp_entries]
         
