@@ -398,7 +398,6 @@ class art_reject(EEGFunction):
         }
         modified_signal, amount_removed = art_per_channel(original_signal, eeg_object.srate, params)
         return modified_signal
-
     
 class bandpass_filter(EEGFunction):
     name = "Bandpass Filter" #Required

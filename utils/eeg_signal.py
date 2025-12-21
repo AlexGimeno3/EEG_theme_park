@@ -16,7 +16,7 @@ class EEGSignal:
         - signal_specs (dict): a dictionary containing the following keys: "srate", "data", "start_time", "flags", "log"
         """
         self.name = signal_specs.get("name","unnamed")
-        self.channel = signal_specs["channel"]
+        self.channel = signal_specs.get("channel", "unspecified")
         self.sourcer = signal_specs.get("sourcer","unspecified")
         self.data = np.asarray(signal_specs["data"])
         self.original_data = copy.deepcopy(self.data) #Initial data in case the user ever wants to compare after filtering, noising, etc

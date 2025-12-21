@@ -18,7 +18,7 @@ def build_signal_object(signal_specs: dict = None, flags: dict = {}) -> object:
     - time_specs (dict): a dictionary containing the time markers of interest in the form marker_name : arr, where marker_name is a string and arr is an array of one or two values in seconds (one if an event is a one-off, two if an event has a start and finish)
     
     Outputs:
-    None. However, will save the signal with its name in signal_cache
+    - EEGSignal object (the signal based on signal specs)
     """
     #Step 0: Quality control on inputs
     required_keys = ["name", "amp", "freq", "phase", "srate", "time_length"]
