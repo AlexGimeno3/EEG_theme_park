@@ -1,0 +1,9 @@
+
+Applied function Save Image with specs {'save_path': 'C:\\Users\\Alex_G\\Proton Drive\\agimeno310\\My files\\Personal Projects\\Autodidact\\test_signals\\save_test', 'zoom_n': None, 'ext': '.png', 'dpi': 300, 'figsize': '(12, 4)'}
+
+Clean segment analysis (min length = 20.0s):
+  - Found 1 clean segments
+  - Clean data: 100.0% of signal
+  - Marked segments shorter than 20.0s as NaN
+Applied analyzer power_8_10_hz with specs {}
+Applied analyzer spectral_edge_frequency with specs {}

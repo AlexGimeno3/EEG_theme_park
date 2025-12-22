@@ -163,7 +163,7 @@ class EEGSignal:
 
         Inputs:
         - time (float): time point in SECONDS that we would like to find the index of
-        - limit (float): maximum difference we accept between the input time and the time value we were able to find (NOT inclusive). Default is 1/srate
+        - limit (float): maximum difference we accept between the input time and the time value we were able to find (NOT inclusive). Default is 2/srate
         """
         #Initialize limit
         if limit is None:
@@ -221,6 +221,13 @@ class EEGSignal:
         
 
 
+    
+    @property
+    def analyze_time_limits(self): #Added for redundancy
+        return self.analyze_time_lims
+    @analyze_time_limits.setter
+    def analyze_time_limits(self, value):
+        self.analyze_time_lims = value
     
     @property
     def flags(self):

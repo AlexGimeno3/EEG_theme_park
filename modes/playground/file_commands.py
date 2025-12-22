@@ -50,14 +50,13 @@ def build_signal_object(signal_specs: dict = None, flags: dict = {}) -> object:
     signal = np.imag(complex_signal)
     del complex_signal
     log_text = f"Signal {signal_specs['name']} initialized with amplitude {a} uV, frequency {f} Hz, phase {phi} rad, length {(num_samples/signal_specs['srate']):.2f} sec, and starting at {time_start} sec."
-    signal_data = { #From this data, we can reconstruct the time array for future analyses
-        "name" : signal_specs["name"], 
-        "srate" : signal_specs["srate"],
-        "data" : signal,
-        "start_time" : time_start,
-        "flags" : flags,
-        "log" : log_text
-    }
+    signal_data = signal_specs.copy()  # Start with all input specs
+    signal_data.update({  # Override/add the generated fields
+        "data": signal,
+        "start_time": time_start,
+        "flags": flags,
+        "log": log_text
+    })
     
     return eeg_signal.EEGSignal(**signal_data)
 

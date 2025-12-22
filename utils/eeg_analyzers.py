@@ -4,7 +4,7 @@ This file will contain the different functions that we want to use to analyze ou
 
 from abc import ABC, abstractmethod
 from eeg_theme_park.utils.eeg_signal import TimeSeries
-from eeg_theme_park.utils.NEURAL_py_fork.spectral_features import main_spectral
+from eeg_theme_park.utils.NEURAL_py_fork.spectral_features import main_spectral, spectral_power
 import numpy as np
 from tqdm import tqdm
 import copy
@@ -203,20 +203,15 @@ class Power8to10Hz(EEGAnalyzer):
             #Analysis code here
             #---------------------------------------
             srate = eeg_object.srate
-            freq_low = 8
-            freq_high = 10
-            fft_values = np.fft.fft(window_signal)
-            fft_freqs = np.fft.fftfreq(len(window_signal), 1/srate)
-            # Get positive frequencies only
-            pos_mask = fft_freqs >= 0
-            fft_freqs = fft_freqs[pos_mask]
-            fft_values = fft_values[pos_mask]
-            # Find indices in frequency band
-            freq_mask = (fft_freqs >= freq_low) & (fft_freqs <= freq_high)
-            # Compute power (magnitude squared, normalized)
-            power_spectrum = np.abs(fft_values) ** 2 / len(window_signal)
-            band_power = np.sum(power_spectrum[freq_mask])
-            return band_power
+            params = {
+                "freq_bands" : [[8,10]],
+                "method" : "periodogram",
+                "L_window" : 2, 
+                "window_type" : "hamm", #Other option is "rect"; Hamming chosen to reduce spectral leakage
+                "overlap" : 50,
+
+            }
+            return spectral_power(window_signal, srate, "spectral_power",params)[0]
             #----------------------
 
 class EdgeFrequency(EEGAnalyzer):
