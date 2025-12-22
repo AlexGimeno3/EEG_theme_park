@@ -1,0 +1,121 @@
+
+============================================================
+Error processing test_1_1:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_1_1' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_1_1' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+============================================================
+Error processing test_1_2:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_1_2' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_1_2' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+============================================================
+Error processing test_2_1:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_2_1' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_2_1' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+============================================================
+Error processing test_2_2:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_2_2' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_2_2' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+============================================================
+Error processing test_3_1:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_3_1' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_3_1' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+============================================================
+Error processing test_3_2:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'test_3_2' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'test_3_2' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+
+Clean segment analysis (min length = 20.0s):
+  - Found 1 clean segments
+  - Clean data: 100.0% of signal
+  - Marked segments shorter than 20.0s as NaN
+Applied analyzer power_8_10_hz with specs {}

@@ -11,6 +11,8 @@ import tkinter as tk
 from tkinter import ttk
 import copy
 from scipy.signal import butter, filtfilt, sosfiltfilt
+from pathlib import Path
+import matplotlib.pyplot as plt
 
 class EEGFunction(ABC):
     """
@@ -307,8 +309,8 @@ class add_power(EEGFunction):
         super().__init__(**params, **kwargs)
         self.__dict__.update(params)
 
-        if self.frequency is None or self.amplitude is None or self.srate is None:
-            raise ValueError("frequency, amplitude, and srate are required")
+        if self.frequency is None or self.amplitude is None:
+            raise ValueError("frequency and amplitude are required")
     
     def _apply_function(self, original_signal, eeg_object, **kwargs):
         """
@@ -445,3 +447,199 @@ class bandpass_filter(EEGFunction):
         modified_signal = sosfiltfilt(sos, original_signal)
         print("Bandpass filtering done!")
         return modified_signal
+    
+class add_artefact(EEGFunction):
+    name = "Add noise"
+    params_units_dict = {"num_artefacts":"artefacts", "proportion_artefacts":"", "artefact_type":""}
+
+    def __init__(self, num_artefacts: int = 1, proportion_artefacts: float = 0.5, artefact_type: str = None, **kwargs):
+        """
+        Adds synthetic artefacts to the signal.
+
+        Inputs:
+        - num_artefacts (int): the number of artefacts of a given type to add to a signal
+        - proportion_artefacts (float): the proportion of the signal to make into artefact
+        - artefact_type (str): the type of artefact to add. Currently supported are: ["broadband"]. Defaults to broadband electrical noise.
+        """
+    
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')} #Leave unchanged
+        super().__init__(**params, **kwargs) #Leave unchanged
+        self.__dict__.update(params) #Leave unchanged
+
+    def _apply_function(self, original_signal, eeg_object, **kwargs):
+        """
+        Apply bandpass filter to a signal using a Butterworth filter.
+        
+        Inputs:
+        - original_signal (numpy array): signal segment to modify
+        - eeg_object (EEGSignal object): the eeg)signal object from which the signal came
+        - **kwargs: other parameters
+        
+        Output:
+        - modified_signal (numpy array): filtered signal
+        """
+        artefact_options = ["broadband"]
+        if self.artefact_type is None or self.artefact_type not in artefact_options:
+            self.artefact_type = "broadband"
+        if self.artefact_type == "broadband":
+            #add self.num_artefacts broadband electrical artefacts, totalling self.proportion_artefacts proportion of the signal
+            srate = eeg_object.srate
+            n_samples = len(original_signal)
+            modified_signal = original_signal.copy()
+            # Determine total artefact duration
+            if self.proportion_artefacts is not None:
+                total_artefact_samples = int(n_samples * self.proportion_artefacts)
+            else:
+                total_artefact_samples = n_samples // 2  # Default to 50%
+            # Divide into num_artefacts chunks
+            artefact_duration_samples = total_artefact_samples // self.num_artefacts
+            
+            for i in range(self.num_artefacts):
+                # Random start position
+                start_idx = np.random.randint(0, n_samples - artefact_duration_samples)
+                end_idx = start_idx + artefact_duration_samples
+                
+                # Generate broadband noise (50-500 Hz range)
+                t = np.arange(artefact_duration_samples) / srate
+                noise = np.zeros(artefact_duration_samples)
+                for freq in np.arange(50, 500, 10):
+                    amplitude = np.random.uniform(50, 200)  # High amplitude noise
+                    phase = np.random.uniform(0, 2*np.pi)
+                    noise += amplitude * np.sin(2 * np.pi * freq * t + phase)
+                
+                # Add noise to signal
+                modified_signal[start_idx:end_idx] += noise
+            
+            return modified_signal
+
+class save_image(EEGFunction):
+    name = "Save Image"  # Required
+    params_units_dict = {"save_path": "full path"}  # Required
+    
+    def __init__(self, save_path=None, zoom_n: float = None, ext: str = ".png", dpi: int = 300, figsize: tuple = (12, 4), **kwargs):
+        """
+        Saves an image of the signal to a specified path.
+        
+        Inputs:
+        - save_path (str): the path where we would like the image of the signal saved
+        - zoom_n (float): [FUNCTIONALITY NOT ADDED YET] if not none, will zoom in on the first zoom_n seconds of the signal
+        - ext (str): image extension. .png by default
+        - dpi (int): resolution of saved image (default: 300)
+        - figsize (tuple): figure size as (width, height) in inches (default: (12, 4))
+        - **kwargs: additional parameters passed to parent
+        """
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')}  # Leave unchanged
+        super().__init__(**params, **kwargs)  # Leave unchanged
+        self.__dict__.update(params)  # Leave unchanged
+
+        if isinstance(self.figsize, str):
+            # Parse string like "(12, 4)" to tuple (12, 4)
+            self.figsize = tuple(map(float, self.figsize.strip('()').split(',')))
+        elif self.figsize is not None:
+            # Ensure it's a tuple of numeric types
+            self.figsize = tuple(float(x) for x in self.figsize)
+    
+    def _apply_function(self, original_signal, eeg_object, **kwargs):  # Leave this line as is
+        """
+        Save an image of the signal. NB: TimeSeries will NOT be saved with the signal Figure.
+        
+        Inputs:
+        - original_signal (numpy array): signal segment to modify (not really used in this function)
+        - eeg_object (EEGSignal instance): EEGSignal whose signal we would like to save
+        - **kwargs: other parameters
+        
+        Output:
+        - modified_signal (numpy array): original signal (unchanged, for compatibility with .apply() architecture)
+        """
+        name = eeg_object.name
+        
+        # Ensure save directory exists
+        save_dir = Path(self.save_path)
+        save_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Construct filepath
+        save_path = save_dir / f"{name}{self.ext}"
+        
+        # Only create and save if file doesn't already exist
+        if not save_path.exists():
+            # Get EEG data
+            EEG_data = eeg_object.data
+            EEG_times = eeg_object.times
+            
+            # Data integrity check
+            if not(len(EEG_data) == len(EEG_times)):
+                raise ValueError(f"The number of data points and time points should be the same; however, you have {len(EEG_data)} data points and {len(EEG_times)} time points.")
+            
+            # Downsample helper function
+            def downsample_data(times, data, max_points=1000):
+                if len(data) <= max_points:
+                    return times, data
+                
+                factor = max(1, len(data) // (max_points // 2))
+                downsampled_times = []
+                downsampled_data = []
+                
+                for i in range(0, len(data), factor):
+                    window_end = min(i + factor, len(data))
+                    window_data = data[i:window_end]
+                    window_times = times[i:window_end]
+                    
+                    if len(window_data) > 0:
+                        min_idx = np.argmin(window_data)
+                        max_idx = np.argmax(window_data)
+                        
+                        if min_idx < max_idx:
+                            downsampled_times.extend([window_times[min_idx], window_times[max_idx]])
+                            downsampled_data.extend([window_data[min_idx], window_data[max_idx]])
+                        else:
+                            downsampled_times.extend([window_times[max_idx], window_times[min_idx]])
+                            downsampled_data.extend([window_data[max_idx], window_data[min_idx]])
+                
+                return downsampled_times, downsampled_data
+            
+            # Downsample if needed
+            plot_times, plot_data = downsample_data(EEG_times, EEG_data)
+            
+            # Create figure
+            fig, ax = plt.subplots(figsize=self.figsize)
+            
+            # Plot EEG signal
+            ax.plot(plot_times, plot_data, linewidth=0.5)
+            ax.set_ylabel('Amplitude (uV)')
+            ax.set_xlabel('Time (s)')
+            ax.set_title(f'EEG Signal: {name}')
+            ax.grid(True)
+            ax.set_xlim(min(EEG_times), max(EEG_times))
+            
+            # Format y-axis to avoid scientific notation
+            from matplotlib.ticker import ScalarFormatter
+            formatter = ScalarFormatter(useOffset=False)
+            formatter.set_scientific(False)
+            ax.yaxis.set_major_formatter(formatter)
+            
+            # Plot flags if they exist
+            if hasattr(eeg_object, 'flags') and len(eeg_object.flags) > 0:
+                flags = eeg_object.flags
+                color_idx = 1
+                for flag_name, flag_value in flags.items():
+                    color = f'C{color_idx}'
+                    color_idx += 1
+                    if len(flag_value) == 1:
+                        ax.axvline(x=flag_value[0], color=color, linestyle='--', linewidth=1.5, label=flag_name)
+                    elif len(flag_value) == 3:
+                        ax.axvline(x=flag_value[0], color=color, linestyle='--', linewidth=1.5)
+                        ax.axvline(x=flag_value[1], color=color, linestyle='--', linewidth=1.5, label=flag_name)
+                        if flag_value[2]:
+                            ax.axvspan(flag_value[0], flag_value[1], alpha=0.2, color=color)
+                ax.legend(loc='upper right', fontsize='small')
+            
+            # Save figure
+            plt.tight_layout()
+            plt.savefig(save_path, dpi=self.dpi, bbox_inches='tight')
+            plt.close(fig)
+            
+            print(f"Signal {name} saved to {save_path}!")
+        else:
+            print(f"Signal {name} already exists at {save_path}, skipping save.")
+        
+        return original_signal  # Returns original signal to maintain compatibility with .apply() architecture

@@ -338,8 +338,11 @@ class BatchProcessing(Mode):
                 self.errors_df = pd.concat([self.errors_df, pd.DataFrame([error_row])], ignore_index=True)
        
         #Step 3: Save results and errors DataFrames to Excel files
-        base_results_path = self.files_dir / "eeg_theme_park_results.xlsx"
-        base_errors_path = self.files_dir / "eeg_theme_park_errors.xlsx"
+        check_path = self.files_dir / "results"
+        if not check_path.exists():
+            os.mkdir(check_path)
+        base_results_path = self.files_dir / "results" / "eeg_theme_park_results.xlsx"
+        base_errors_path = self.files_dir / "results" / "eeg_theme_park_errors.xlsx"
         # Function to get unique file path
         def get_unique_path(base_path):
             if not base_path.exists():
@@ -363,13 +366,13 @@ class BatchProcessing(Mode):
         
         #Step 4: Optionally save pipeline
         if save_pipeline:
-            pipeline_path = get_unique_path(self.files_dir / "pipeline.ppl")
+            pipeline_path = get_unique_path(self.files_dir / "results" / "pipeline.ppl")
             with open(pipeline_path, 'wb') as f:
                 pickle.dump(self.pipeline, f)
         
         #Step 5: Save analysis log
         self.analysis_log += self.pipeline.pipeline_log
-        log_path = get_unique_path(self.files_dir / "analysis_log.txt")
+        log_path = get_unique_path(self.files_dir / "results" / "analysis_log.txt")
         with open(log_path, 'w') as f:
             f.write(self.analysis_log)
          
