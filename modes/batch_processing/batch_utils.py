@@ -75,35 +75,79 @@ def _get_file_names(my_mode):
             if not cont_bool:
                 return f"Missing files for Excel entries {missing_from_files_dir}", []
         
-        # Extract ID column and the two flag columns        
-        flag_df = df[[id_col_str, my_mode.event_names[0], my_mode.event_names[1]]].copy()
+       # Extract ID column and the event columns (2 times + 2 optional dates)
+        cols_to_extract = [id_col_str, my_mode.event_names[0], my_mode.event_names[1]]
+        if my_mode.event_names[2] is not None:
+            cols_to_extract.append(my_mode.event_names[2])
+        if my_mode.event_names[3] is not None:
+            cols_to_extract.append(my_mode.event_names[3])
+        flag_df = df[cols_to_extract].copy()
         
-        # Check that flag entries are in HHMMSS format
+        # Warn if dates are None
+        if my_mode.event_names[2] is None or my_mode.event_names[3] is None:
+            gui_utilities.simple_dialogue(
+                "Warning: No date columns selected. This assumes all events occur on the same calendar day as the recording start. "
+                "If your events span multiple days, please restart and select date columns."
+            )
+        
+        # Check that time entries are in HHMMSS format and date entries are in DDMMYYYY format
         format_errors = []
 
         for idx, row in flag_df.iterrows():
-            for event_name in my_mode.event_names:
-                time_value = str(row[event_name])
-                if not _is_valid_hhmmss(time_value):
-                    format_errors.append(f"{id_col_str}: {row[id_col_str]}, Event: {event_name}, Value: {time_value}")
+            # Validate start time
+            time_value = str(row[my_mode.event_names[0]])
+            if not _is_valid_hhmmss(time_value):
+                format_errors.append(f"{id_col_str}: {row[id_col_str]}, Start Time: {time_value}")
+            
+            # Validate end time
+            time_value = str(row[my_mode.event_names[1]])
+            if not _is_valid_hhmmss(time_value):
+                format_errors.append(f"{id_col_str}: {row[id_col_str]}, End Time: {time_value}")
+            
+            # Validate start date if provided
+            if my_mode.event_names[2] is not None:
+                date_value = str(row[my_mode.event_names[2]])
+                if not _is_valid_ddmmyyyy(date_value):
+                    format_errors.append(f"{id_col_str}: {row[id_col_str]}, Start Date: {date_value}")
+            
+            # Validate end date if provided
+            if my_mode.event_names[3] is not None:
+                date_value = str(row[my_mode.event_names[3]])
+                if not _is_valid_ddmmyyyy(date_value):
+                    format_errors.append(f"{id_col_str}: {row[id_col_str]}, End Date: {date_value}")
         
         if format_errors:
             cont_bool = gui_utilities.yes_no(f"The following event times are not correctly formatted (expected HHMMSS) or are not present:\n" + "\n".join(format_errors)+"\n Knowing this, do you want to continue? Pressing yes will continue the analysis, but exclude these listed files.")
             if not cont_bool:
                 return "Event times not correctly formatted", []
         
-        # Check that event 2 time > event 1 time
+       # Check time/date consistency
         time_misformat = []
         for idx, row in flag_df.iterrows():
             time1 = int(str(row[my_mode.event_names[0]]))
             time2 = int(str(row[my_mode.event_names[1]]))
-            if time2 <= time1:
-                time_misformat.append(str(row[id_col_str]))
+            
+            # If dates are provided, check date order
+            if my_mode.event_names[2] is not None and my_mode.event_names[3] is not None:
+                date1 = int(str(row[my_mode.event_names[2]]))
+                date2 = int(str(row[my_mode.event_names[3]]))
+                
+                # If end date is before start date, that's an error
+                if date2 < date1:
+                    time_misformat.append(str(row[id_col_str]))
+                # If same date, check times
+                elif date2 == date1 and time2 <= time1:
+                    time_misformat.append(str(row[id_col_str]))
+            else:
+                # No dates provided - can only check times (same-day assumption)
+                if time2 <= time1:
+                    time_misformat.append(str(row[id_col_str]))
         
         if time_misformat:
-            mismatch_cont_bool = gui_utilities.yes_no(f"EEG Theme Park cannot currently support recordings that have happened over multiple days; however, the second (later) event time in the IDs {time_misformat} seems to occur before the first one. This can happen when a recording is split across multiple days. Would you like to proceed, knowing these {len(time_misformat)} files will be excluded?")
+            mismatch_cont_bool = gui_utilities.yes_no(
+                f"The event times/dates in the IDs {time_misformat} appear invalid (end occurs before or at the same time as start). Would you like to proceed, knowing these {len(time_misformat)} files will be excluded?")
             if not mismatch_cont_bool:
-                return "Time mismatch; operation ended by user", []
+                return "Time/date mismatch; operation ended by user", []
         
         # Generate final ID array
         all_IDs = [f.stem for f in files_dir.iterdir() if f.is_file()]
@@ -211,10 +255,12 @@ def verify_excel_path(excel_path = None):
 
 def select_flag_names(excel_path):
     """
-    Function that creates a GUI to allow the user to select two flag names based the columns in the Excel files. NB: mode.event_names will be used to log which flags were saved.
+    Function that creates a GUI to allow the user to select event columns.
 
     Outputs:
-    - flag_names (arr of str): two-item array containing the names of the columns in excel_path that hold timing data for flag_1 and flag_2 for index 1 and index 2, respectively.
+    - flag_names (arr of str or None): 4-item array containing column names 
+      [start_time_col, end_time_col, start_date_col, end_date_col]
+      Date columns can be None if not selected.
     """
     
     # Load Excel file to get column names
@@ -226,14 +272,16 @@ def select_flag_names(excel_path):
         return None
     
     # Create the result container
-    result = {'flag_names': None, 'should_continue': False}
+    result = {'flag_names': None}
     
     def on_submit():
-        event1 = event1_var.get()
-        event2 = event2_var.get()
+        start_time = start_time_var.get()
+        end_time = end_time_var.get()
+        start_date = start_date_var.get() if start_date_var.get() != "None (same-day events)" else None
+        end_date = end_date_var.get() if end_date_var.get() != "None (same-day events)" else None
         
-        if event1 and event2:
-            result['flag_names'] = [event1, event2]
+        if start_time and end_time:
+            result['flag_names'] = [start_time, end_time, start_date, end_date]
             window.destroy()
     
     def on_close():
@@ -245,23 +293,43 @@ def select_flag_names(excel_path):
     window.protocol("WM_DELETE_WINDOW", on_close)
     
     # Instruction label
-    tk.Label(window, text="Please select the columns in the Excel file that contain the time event data.").pack(pady=10)
+    tk.Label(window, text="Please select the columns containing event time and date data.\nDates are optional for same-day events (format: DDMMYYYY).", 
+             wraplength=580).pack(pady=10)
     
-    # Event 1 selection
-    event1_frame = tk.Frame(window)
-    event1_frame.pack(pady=5, padx=10, fill='x')
-    tk.Label(event1_frame, text="Event 1:").pack(side='left')
-    event1_var = tk.StringVar()
-    event1_dropdown = ttk.Combobox(event1_frame, textvariable=event1_var, values=column_names, state='readonly')
-    event1_dropdown.pack(side='left', padx=5, fill='x', expand=True)
+    # Start time selection
+    start_time_frame = tk.Frame(window)
+    start_time_frame.pack(pady=5, padx=10, fill='x')
+    tk.Label(start_time_frame, text="Start Time (HHMMSS):").pack(side='left')
+    start_time_var = tk.StringVar()
+    start_time_dropdown = ttk.Combobox(start_time_frame, textvariable=start_time_var, values=column_names, state='readonly')
+    start_time_dropdown.pack(side='left', padx=5, fill='x', expand=True)
     
-    # Event 2 selection
-    event2_frame = tk.Frame(window)
-    event2_frame.pack(pady=5, padx=10, fill='x')
-    tk.Label(event2_frame, text="Event 2:").pack(side='left')
-    event2_var = tk.StringVar()
-    event2_dropdown = ttk.Combobox(event2_frame, textvariable=event2_var, values=column_names, state='readonly')
-    event2_dropdown.pack(side='left', padx=5, fill='x', expand=True)
+    # End time selection
+    end_time_frame = tk.Frame(window)
+    end_time_frame.pack(pady=5, padx=10, fill='x')
+    tk.Label(end_time_frame, text="End Time (HHMMSS):").pack(side='left')
+    end_time_var = tk.StringVar()
+    end_time_dropdown = ttk.Combobox(end_time_frame, textvariable=end_time_var, values=column_names, state='readonly')
+    end_time_dropdown.pack(side='left', padx=5, fill='x', expand=True)
+    
+    # Start date selection (with None option)
+    start_date_frame = tk.Frame(window)
+    start_date_frame.pack(pady=5, padx=10, fill='x')
+    tk.Label(start_date_frame, text="Start Date (DDMMYYYY):").pack(side='left')
+    start_date_var = tk.StringVar()
+    date_options = ["None (same-day events)"] + column_names
+    start_date_dropdown = ttk.Combobox(start_date_frame, textvariable=start_date_var, values=date_options, state='readonly')
+    start_date_dropdown.set("None (same-day events)")
+    start_date_dropdown.pack(side='left', padx=5, fill='x', expand=True)
+    
+    # End date selection (with None option)
+    end_date_frame = tk.Frame(window)
+    end_date_frame.pack(pady=5, padx=10, fill='x')
+    tk.Label(end_date_frame, text="End Date (DDMMYYYY):").pack(side='left')
+    end_date_var = tk.StringVar()
+    end_date_dropdown = ttk.Combobox(end_date_frame, textvariable=end_date_var, values=date_options, state='readonly')
+    end_date_dropdown.set("None (same-day events)")
+    end_date_dropdown.pack(side='left', padx=5, fill='x', expand=True)
     
     # Submit button
     submit_button = tk.Button(window, text="Submit", command=on_submit)
@@ -270,9 +338,9 @@ def select_flag_names(excel_path):
     # Wait for window to close
     window.wait_window()
     
-    # If user closed without selecting, ask if they want to continue
+    # If user closed without selecting times, ask if they want to continue
     if result['flag_names'] is None:
-        cont_bool = gui_utilities.yes_no("You haven't selected a flag. Processing will proceed with the entire EEG file. Is this OK?")
+        cont_bool = gui_utilities.yes_no("You haven't selected event times. Processing will proceed with the entire EEG file. Is this OK?")
         if cont_bool:
             return None
         else:
@@ -280,15 +348,33 @@ def select_flag_names(excel_path):
     
     return result['flag_names']
 
+
+def _is_valid_ddmmyyyy(date_str):
+    """Helper function to validate DDMMYYYY format."""
+    if date_str is None or str(date_str).strip() in ['', 'nan', 'None']:
+        return True  # None is acceptable
+    date_str = str(date_str).strip()
+    if len(date_str) != 8:
+        return False
+    if not date_str.isdigit():
+        return False
+    dd = int(date_str[0:2])
+    mm = int(date_str[2:4])
+    yyyy = int(date_str[4:8])
+    return 1 <= dd <= 31 and 1 <= mm <= 12 and yyyy >= 1
+
 def get_flag_times(flag_excel_path, id, flag_names):
     """
-    Gets the flag start and end times (as a datetime.time object) from the Excel
+    Gets the flag start/end times and dates from the Excel
+    
     Inputs:
-    - flag_excel_path (Path object): path to the excel file holding the flag names and values
-    - id (str): the key value for the eeg_signal file we are getting the flag data from
-    - flag_names (arr of str): 2-item array containing the column names of the flags
+    - flag_excel_path (Path object): path to the excel file
+    - id (str): the key value for the eeg_signal file
+    - flag_names (arr of str): 4-item array [start_time_col, end_time_col, start_date_col, end_date_col]
+      Date columns can be None
+    
     Outputs:
-    - ret_arr (arr of dt.time): 2-item array of dt.time objects that represent the start and end times for the flag
+    - ret_arr (arr): 4-item array [dt.time, dt.time, dt.date or None, dt.date or None]
     """
     if not isinstance(flag_excel_path, Path):
         flag_excel_path = Path(flag_excel_path)
@@ -296,38 +382,57 @@ def get_flag_times(flag_excel_path, id, flag_names):
     try:
         # Load Excel file into pandas df
         excel_df = pd.read_excel(flag_excel_path)
-        # The ID column should be named "ID"
         id_str = "ID"
-        # Find the entry in excel_df where the column id_str equals id
-        # Convert both to strings for comparison to handle different data types
+        
+        # Find the matching row
         matching_rows = excel_df[excel_df[id_str].astype(str) == str(id)]
         if matching_rows.empty:
             raise ValueError(f"No row found with ID '{id}' in the Excel file")
-        # Get the first matching row
+        
         row = matching_rows.iloc[0]
-        # Extract the values from the two flag columns
-        flag_start_value = row[flag_names[0]]
-        flag_end_value = row[flag_names[1]]
-        # Convert each entry into a dt.time object
+        
+        # Extract time values
+        start_time_value = row[flag_names[0]]
+        end_time_value = row[flag_names[1]]
+        
+        # Convert times to dt.time objects
         def convert_to_time(value):
             """Helper function to convert HHMMSS format to datetime.time"""
-            # Convert to int if it's a float or string
             time_int = int(value)
-            # Extract hours, minutes, and seconds from HHMMSS format
             hours = time_int // 10000
             minutes = (time_int % 10000) // 100
             seconds = time_int % 100
-            # Create and return the time object
             return dt.time(hours, minutes, seconds)
-        # Convert both flag values to time objects
-        start_time = convert_to_time(flag_start_value)
-        end_time = convert_to_time(flag_end_value)
-        # Store in return array
-        ret_arr = [start_time, end_time]
+        
+        start_time = convert_to_time(start_time_value)
+        end_time = convert_to_time(end_time_value)
+        
+        # Extract and convert date values (if provided)
+        start_date = None
+        end_date = None
+        
+        if flag_names[2] is not None:
+            start_date_value = row[flag_names[2]]
+            if not pd.isna(start_date_value):
+                date_int = int(start_date_value)
+                day = date_int // 1000000
+                month = (date_int % 1000000) // 10000
+                year = date_int % 10000
+                start_date = dt.date(year, month, day)
+        
+        if flag_names[3] is not None:
+            end_date_value = row[flag_names[3]]
+            if not pd.isna(end_date_value):
+                date_int = int(end_date_value)
+                day = date_int // 1000000
+                month = (date_int % 1000000) // 10000
+                year = date_int % 10000
+                end_date = dt.date(year, month, day)
+        
+        ret_arr = [start_time, end_time, start_date, end_date]
         return ret_arr
         
     except Exception as e:
-        # If any errors occur, raise the specified error message
         raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
 
     

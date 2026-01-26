@@ -12,6 +12,7 @@ from eeg_theme_park.modes.batch_processing.pipeline_gui import build_pipeline, i
 import pickle
 import tkinter as tk
 from tkinter import ttk
+import datetime as dt
 
 class BatchProcessing(Mode):
     """
@@ -151,7 +152,9 @@ class BatchProcessing(Mode):
             if self.excel_path is not None:
                 self.event_names = select_flag_names(self.excel_path)
                 if self.event_names is not None:
-                    self.events_label.config(text=f"Events from Excel: {', '.join(self.event_names)}")
+                    time_cols = f"{self.event_names[0]}, {self.event_names[1]}"
+                    date_info = "same-day" if self.event_names[2] is None else f"{self.event_names[2]}, {self.event_names[3]}"
+                    self.events_label.config(text=f"Events from Excel: Times=[{time_cols}], Dates=[{date_info}]")
                 else:
                     self.events_label.config(text="No events selected - will analyze entire signals")
             else:
@@ -232,16 +235,6 @@ class BatchProcessing(Mode):
                 f"Files processed: {len(self.names_list)}\n"
                 f"Check the results Excel file for output."
             )
-
-    def get_file_names(self):
-        """Get list of valid file names from the selected directory"""
-        if not(self.event_names is None and self.excel_path is None):
-            names_list, error_log_text = _get_file_names(self)
-        else:
-            names_list = [f.name for f in self.files_dir.iterdir() if f.suffix in self.supported_extensions and f.is_file()]
-            error_log_text = ""
-        self.analysis_log += error_log_text
-        self.names_list = [self.files_dir/Path(name) for name in names_list]
     
     def run_analysis(self, flag_times=None, save_pipeline=True):
         """
@@ -297,6 +290,22 @@ class BatchProcessing(Mode):
                             
                 elif self.excel_path is not None and self.event_names is not None:
                     flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                    # flag_times is [dt.time, dt.time, dt.date or None, dt.date or None]
+                    
+                    # Convert to [dt.datetime, dt.datetime]
+                    if flag_times[2] is not None and flag_times[3] is not None:
+                        # Dates provided - combine directly
+                        start_datetime = dt.datetime.combine(flag_times[2], flag_times[0])
+                        end_datetime = dt.datetime.combine(flag_times[3], flag_times[1])
+                    else:
+                        # No dates - use recording start date
+                        recording_date = eeg_signal.datetime_collected.date()
+                        start_datetime = dt.datetime.combine(recording_date, flag_times[0])
+                        end_datetime = dt.datetime.combine(recording_date, flag_times[1])
+                    
+                    flag_times = [start_datetime, end_datetime]
+                    
+                    # Now pass to get_real_time_window
                     flag_times = eeg_signal.get_real_time_window(flag_times)
                     eeg_signal.add_flag("Analyzed event", flag_times, shade=True)
                     eeg_signal.analyze_time_limits = flag_times

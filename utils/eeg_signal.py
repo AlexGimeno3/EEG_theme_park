@@ -186,7 +186,7 @@ class EEGSignal:
         - flag_times (list of float, dt.time, or dt.datetime): list of flag times
         
         Outputs:
-        - list of floats: signal-relative times in seconds (snapped to actual samples)
+        - converted_times (2-item list of floats): signal-relative times in seconds (snapped to actual samples)
         """
         # Convert to signal-relative times
         converted_times = []
