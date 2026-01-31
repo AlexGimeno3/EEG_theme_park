@@ -1,0 +1,29 @@
+
+============================================================
+Error processing PN07:
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 305, in get_flag_times
+    raise ValueError(f"No row found with ID '{id}' in the Excel file")
+ValueError: No row found with ID 'PN07' in the Excel file
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_processing.py", line 299, in run_analysis
+    flag_times = get_flag_times(self.excel_path, id, self.event_names)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\modes\batch_processing\batch_utils.py", line 331, in get_flag_times
+    raise ValueError(f"Error occurred ({e}), but should have been sandboxed. Please contact me at agimeno310@gmail.com") from e
+ValueError: Error occurred (No row found with ID 'PN07' in the Excel file), but should have been sandboxed. Please contact me at agimeno310@gmail.com
+
+============================================================
+
+Applied function Artefact Rejection with specs {'max_zero_length': 1, 'high_amp_collar': 10, 'jump_collar': 0.5, 'max_repeat_length': 0.1, 'max_voltage': 1500, 'max_jump': 200}
+Applied function Bandpass Filter with specs {'lowpass': 0.5, 'highpass': 30.0, 'order': 4}
+
+Clean segment analysis (min length = 20.0s):
+  - Found 1 clean segments
+  - Clean data: 100.0% of signal
+  - Marked segments shorter than 20.0s as NaN
+Applied analyzer power_8_10_hz with specs {}
+Applied analyzer spectral_edge_frequency with specs {}

@@ -1,0 +1,10 @@
+
+Applied function Artefact Rejection with specs {'max_zero_length': 1, 'high_amp_collar': 10, 'jump_collar': 0.5, 'max_repeat_length': 0.1, 'max_voltage': 1500, 'max_jump': 200}
+Applied function Bandpass Filter with specs {'lowpass': 0.5, 'highpass': 30.0, 'order': 4}
+
+Clean segment analysis (min length = 20.0s):
+  - Found 1 clean segments
+  - Clean data: 100.0% of signal
+  - Marked segments shorter than 20.0s as NaN
+Applied analyzer power_8_10_hz with specs {}
+Applied analyzer spectral_edge_frequency with specs {}

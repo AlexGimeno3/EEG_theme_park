@@ -455,6 +455,8 @@ class PlaygroundMode(Mode):
             self.current_signal = eeg_signal_obj
             self.has_unsaved_changes = False
             self.signal_dir = Path(file_path.parent)
+            self.display_time_lims = [self.current_signal.times[0], self.current_signal.times[-1]]
+            self.analyze_time_lims = self.display_time_lims
         if not self.current_signal is None:
             self.current_signal.log_text("Signal loaded from file.")
         self.update_display()
