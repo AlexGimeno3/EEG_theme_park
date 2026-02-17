@@ -9,7 +9,7 @@ from eeg_theme_park.utils.eeg_signal import EEGSignal
 import pickle as pkl
 import mne
 from mne._fiff import utils
-from eeg_theme_park.utils.gui_utilities import choose_channel, yes_no
+from eeg_theme_park.utils.gui_utilities import choose_channel, yes_no, text_entry
 from eeg_theme_park.utils.misc_utils import get_datetime_from_excel
 
 class EEGLoader(ABC):
@@ -180,8 +180,11 @@ class BDFLoader(EEGLoader):
         return [".bdf"]
     
 
-class DettiEDFLoader(EEGLoader):
-    def add_flags(self, eeg_signal_obj):
+class EDFLoader(EEGLoader):
+    global sourcers 
+    sourcers = ["detti", "wrlab"]
+    
+    def add_detti_flags(self, eeg_signal_obj):
         
         search_name = eeg_signal_obj.name
         
@@ -353,12 +356,13 @@ class DettiEDFLoader(EEGLoader):
                 
                 eeg_signal_obj.add_flag(name, times)
             
-            if sourcer is None:
-                detti_bool = yes_no("Are these files from Detti et al.?")
-                sourcer = ["detti" if detti_bool else "unspecified"][0]
-                eeg_signal_obj.sourcer = sourcer  
+            if sourcer is None: #NB: sourcers are used for files where event data is NOT contained in the EDF annotations and we need special code to load them in. This is most often the case in demo files where event data are stored in strange ways (e.g., .txt files). Note that events/times stored in .xlsx files (so long as they are in the right format) can be loaded using the batch processing mode. If sourcer are left as "unspecified", the EDF will still load correctly (with its annotations stored as flags), there will just be no bespoke importation of any extra events.
+                sourcer = text_entry("Where do these files come from? Current options are 'detti' and 'wrlab'.")
+                sourcer = [sourcer if sourcer in sourcers else "unspecified"][0]
+                eeg_signal_obj.sourcer = sourcer
+             
             if sourcer == "detti":
-                self.add_flags(eeg_signal_obj)
+                self.add_detti_flags(eeg_signal_obj)
             
             return (eeg_signal_obj, file_path)
     
