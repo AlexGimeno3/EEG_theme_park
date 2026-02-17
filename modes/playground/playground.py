@@ -311,8 +311,7 @@ class PlaygroundMode(Mode):
         if self.min_clean_time is None:
             self.min_clean_time = float(gui_utilities.text_entry("What is the minimum amount of consecutive clean signal you want to be considered for processing an analysis?"))
         fxn, lims = self.get_functions()
-        entire_signal_range = [self.current_signal.times[0], self.current_signal.times[-1]]
-        self.current_signal = fxn.apply(self.current_signal, time_range=entire_signal_range, flags_bool=True, min_clean_length=self.min_clean_time)
+        self.current_signal = fxn.apply(self.current_signal, time_range=lims, flags_bool=True, min_clean_length=self.min_clean_time)
         #Now, we need to re-run all our analyses on the new data
         analyzers = eeg_analyzers.AllAnalyzers._analyzers
         for analyzer in analyzers:

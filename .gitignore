@@ -9,3 +9,4 @@ __pycache__/
 *.egg-info/
 *.ico
 /test_signals/
+test_signals_detti/Detti, 2020/signals/*.edf

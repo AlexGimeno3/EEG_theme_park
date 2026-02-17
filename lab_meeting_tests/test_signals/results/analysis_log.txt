@@ -1,0 +1,8 @@
+
+
+Clean segment analysis (min length = 20.0s):
+  - Found 1 clean segments
+  - Clean data: 100.0% of signal
+  - Marked segments shorter than 20.0s as NaN
+Applied analyzer power_8_10_hz with specs {}
+Applied analyzer spectral_edge_frequency with specs {}
