@@ -240,3 +240,20 @@ class EdgeFrequency(EEGAnalyzer):
             sef = main_spectral(window_signal, srate, "spectral_edge_frequency", pass_params)
             return sef
             #----------------------
+
+class wr_power(EEGAnalyzer):
+    """
+    Calculates spectral/EEG power as done by Williams-Robinson for testing.
+    """
+    name = "wr_power"
+    units = "uV^2"
+    time_details = {"window_length":30,"advance_time":15}
+    
+    def __init__(self, **kwargs): #Leave unchanged
+        super().__init__(**kwargs) #Leave unchanged
+    
+    def _apply_function(self, window_signal, eeg_object, **kwargs): #Leave unchanged
+            #Analysis code here
+            #---------------------------------------
+            pass
+            #Code to analyze as SWR did.
