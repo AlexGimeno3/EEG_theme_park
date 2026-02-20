@@ -242,25 +242,48 @@ class EdgeFrequency(EEGAnalyzer):
             return sef
             #----------------------
 
+from scipy.signal.windows import dpss
+from scipy.fft import fft
+
 class wr_relative_delta_power(EEGAnalyzer):
     """
-    Relative delta power (1-4 Hz)
+    Relative delta power (1-4 Hz) / total power (1-40 Hz),
+    computed via multitaper spectral estimation matching Chronux mtspectrumc
+    with tapers=[3 5], fpass=[1 40], pad=-1.
     """
+    name = "wr_relative_delta_power"
+    units = ""
+    time_details = {"window_length": 30, "advance_time": 15}
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-class wr_power(EEGAnalyzer):
-    """
-    Calculates spectral/EEG power as done by Williams-Roberson for testing.
-    """
-    name = "wr_power"
-    units = "uV^2"
-    time_details = {"window_length":30,"advance_time":15}
-    
-    def __init__(self, **kwargs): #Leave unchanged
-        super().__init__(**kwargs) #Leave unchanged
-    
-    def _apply_function(self, window_signal, eeg_object, **kwargs): #Leave unchanged
-            #Analysis code here
-            #---------------------------------------
-            pass
-            #Code to analyze as SWR did.
+    def _apply_function(self, window_signal, eeg_object, **kwargs):
+        srate = eeg_object.srate
+        N = len(window_signal)
+        NW = 3          # time-bandwidth product
+        K = 5           # number of tapers
+
+        # Generate DPSS tapers (matching Chronux tapers=[3 5])
+        tapers = dpss(N, NW, Kmax=K)
+
+        # Compute multitaper spectrum (pad=-1 means no zero-padding, so nfft=N)
+        nfft = N
+        freqs = np.fft.rfftfreq(nfft, d=1.0 / srate)
+
+        # Average power across tapers
+        S = np.zeros(len(freqs))
+        for taper in tapers:
+            tapered_signal = window_signal * taper
+            Xf = fft(tapered_signal, n=nfft)
+            S += np.abs(Xf[:len(freqs)]) ** 2
+        S /= K
+
+        # Frequency masks matching MATLAB's fpass=[1 40] and band=[1 4]
+        fpass_mask = (freqs >= 1) & (freqs <= 40)
+        delta_mask = (freqs > 1) & (freqs < 4)
+
+        S_pass = S[fpass_mask]
+        S_delta = S[delta_mask]
+
+        return np.mean(S_delta) / np.mean(S_pass) if np.mean(S_pass) > 0 else 0.0
