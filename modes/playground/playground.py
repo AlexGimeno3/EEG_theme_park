@@ -79,6 +79,7 @@ class PlaygroundMode(Mode):
             view_menu.add_command(label="View time series", command=self.view_ts_cmd)
             view_menu.add_command(label="Zoom time series", command=self.zoom_cmd)
             view_menu.add_command(label="View flags", command=self.view_flags_cmd)
+            view_menu.add_command(label="Select flags", command=self.select_flags_cmd)
             view_menu.add_command(label="View signal data", command=self.view_signal_info_cmd)
 
     def show(self):
@@ -123,12 +124,34 @@ class PlaygroundMode(Mode):
         
         # Add log entries
         if hasattr(self.current_signal, 'log') and self.current_signal.log:
-            info_lines.extend(self.current_signal.log)
+            info_lines.extend(self.current_signal.log.strip().split('\n'))
         else:
             info_lines.append("No log entries.")
         
         message = "\n".join(info_lines)
-        gui_utilities.simple_dialogue(message)
+
+        #Scrollable dialogue
+        dialogue = tk.Toplevel(self)
+        dialogue.title("Signal information")
+        dialogue.geometry("600x500")
+        dialogue.grab_set()
+        dialogue.lift()
+        dialogue.focus_force()
+
+        text_frame = ttk.Frame(dialogue)
+        text_frame.pack(fill=tk.BOTH,expand=True,padx=10,pady=10)
+
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
+        scrollbar.pack(side="right",fill="y")
+
+        text_widget = tk.Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
+        text_widget.insert("1.0",message)
+        text_widget.config(state="disabled")
+        text_widget.pack(side="left", fill="both", expand=True)
+
+        scrollbar.config(command=text_widget.yview)
+
+        ttk.Button(dialogue, text="Close", command=dialogue.destroy).pack(pady=10)
     
     def view_flags_cmd(self):
         if self.current_signal is None:
@@ -153,7 +176,105 @@ class PlaygroundMode(Mode):
                 message_lines.append(f"  • {flag_name}: {times_sec[0]:.3f} s - {times_sec[1]:.3f} s{shade_text}")
         
         message = "\n".join(message_lines)
-        gui_utilities.simple_dialogue(message)
+
+        #Scrollable dialogue
+        dialogue = tk.Toplevel(self)
+        dialogue.title("View Flags")
+        dialogue.geometry("500x400")
+        dialogue.grab_set()
+        dialogue.lift()
+        dialogue.focus_force()
+
+        text_frame = ttk.Frame(dialogue)
+        text_frame.pack(fill=tk.BOTH,expand=True,padx=10,pady=10)
+
+        scrollbar = ttk.Scrollbar(text_frame, orient="vertical")
+        scrollbar.pack(side="right",fill="y")
+
+        text_widget = tk.Text(text_frame, wrap="word", yscrollcommand=scrollbar.set)
+        text_widget.insert("1.0",message)
+        text_widget.config(state="disabled")
+        text_widget.pack(side="left", fill="both", expand=True)
+
+        scrollbar.config(command=text_widget.yview)
+
+        ttk.Button(dialogue, text="Close", command=dialogue.destroy).pack(pady=10)
+    
+    def select_flags_cmd(self):
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue("You need to build or import a signal before you can select flags.")
+            return
+        if not self.current_signal.flags:
+            gui_utilities.simple_dialogue("No flags have been set for this signal.")
+            return
+        if not hasattr(self.current_signal, "_flag_visibility"):
+            self.current_signal._flag_visibility = {}
+
+        flag_names = list(self.current_signal.flags.keys())
+
+        #Build dialogue window
+        dialogue = tk.Toplevel(self)
+        dialogue.title("Select Flags to Display")
+        dialogue.geometry("400x500")
+        dialogue.grab_set()
+        dialogue.lift()
+        dialogue.focus_force()
+
+        #Main label
+        main_label = ttk.Label(dialogue, text = "Select flags to display:")
+        main_label.pack(pady=10)
+
+        #Create frame for checkboxes with scrollbar
+        checkbox_frame_outer = ttk.Frame(dialogue)
+        checkbox_frame_outer.pack(fill=tk.BOTH, expand=True, padx=10,pady=10)
+
+        canvas = tk.Canvas(checkbox_frame_outer)
+        scrollbar = ttk.Scrollbar(checkbox_frame_outer, orient="vertical", command=canvas.yview)
+        checkbox_frame = ttk.Frame(canvas)
+
+        checkbox_frame.bind("<Configure>",lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0,0), window = checkbox_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left",fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        #Dict for checkbox variables
+        checkbox_vars = {}
+
+        #Create checkboxes for each flag
+        for idx, name in enumerate(flag_names):
+            visible = self.current_signal._flag_visibility.get(name, True)
+            var = tk.BooleanVar(value = visible)
+            checkbox_vars[name] = var
+            cb = ttk.Checkbutton(checkbox_frame, text=name, variable=var)
+            cb.grid(row=idx, column=0, sticky="w",padx=5,pady=2)
+        
+        def submit():
+            for name, var in checkbox_vars.items():
+                self.current_signal._flag_visibility[name] = var.get()
+            dialogue.destroy()
+            self.update_display(time_series=self.view_timeseries)
+        
+        #Select all/deselect all buttons
+        button_frame = ttk.Frame(dialogue)
+        button_frame.pack(pady=(0, 5))
+        def select_all():
+            for var in checkbox_vars.values():
+                var.set(True)
+        
+        def deselect_all():
+            for var in checkbox_vars.values():
+                var.set(False)
+        ttk.Button(button_frame, text="Select all", command=select_all).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Deselect all", command=deselect_all).pack(side="left", padx=5)
+        
+        #Submit button
+        submit_button = ttk.Button(dialogue, text="Submit", command=submit)
+        submit_button.pack(pady=20)
+
+        dialogue.wait_window()
     
     def zoom_cmd(self):
         if self.current_signal is None:
@@ -921,6 +1042,11 @@ class PlaygroundMode(Mode):
             flag_colors = {}  # Store colors for legend
             color_idx = len(time_series) + 1  # Start after time series colors
             for flag_name, flag_value in flags.items():
+                #Do not display flags marked by user as non-visible
+                if not hasattr(self.current_signal, '_flag_visibility'):
+                    self.current_signal._flag_visibility = {}
+                if not self.current_signal._flag_visibility.get(flag_name, True):
+                    continue
                 # Assign unique color to this flag
                 color = f'C{color_idx}'
                 flag_colors[flag_name] = color

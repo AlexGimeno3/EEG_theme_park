@@ -29,6 +29,7 @@ class EEGSignal:
         self.analyze_time_lims = []
         self.time_series = [] #List of TimeSeries objects to allow for dynamic storage and generation
         self.flags = signal_specs.get("flags",{}) #Note that self.flags is in the format {"name":[list]}, where list contains one or two time values (IN MILLISECONDS). If list contains two time values, it must also contain a third boolean value (this is enforced with a setter); if shade is True, the space between the two displayed lines will be highlighted on all plots when displayed by the main GUI. 
+        self._flag_visibility = {} #Dictionary mapping eeach flag name to a boolean to determine whether or not to show it in playground mode. If True, shown in playground mode; if False, not shown when rendering.
         #Initialize log
         self.log = signal_specs.get("log","")
         current_datetime = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -156,6 +157,7 @@ class EEGSignal:
         if normalized_name not in self._flags:
             raise KeyError(f"The flag you requested ({flag_name}) does not exist amongst the flags in the signal ({self.name}). Available flags: {list(self._flags.keys())}.")
         del self._flags[normalized_name]
+        self._flag_visibility.pop(normalized_name,None)
     
     def time_to_index(self, time, limit = None):
         """
