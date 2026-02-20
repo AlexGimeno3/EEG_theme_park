@@ -7,7 +7,8 @@ from eeg_theme_park.utils.eeg_signal import TimeSeries
 from eeg_theme_park.utils.NEURAL_py_fork.spectral_features import main_spectral, spectral_power
 import numpy as np
 from tqdm import tqdm
-import copy
+from scipy.signal import hilbert
+import antropy as ant
 
 class EEGAnalyzer(ABC):
     """
@@ -241,9 +242,15 @@ class EdgeFrequency(EEGAnalyzer):
             return sef
             #----------------------
 
+class wr_relative_delta_power(EEGAnalyzer):
+    """
+    Relative delta power (1-4 Hz)
+    """
+
+
 class wr_power(EEGAnalyzer):
     """
-    Calculates spectral/EEG power as done by Williams-Robinson for testing.
+    Calculates spectral/EEG power as done by Williams-Roberson for testing.
     """
     name = "wr_power"
     units = "uV^2"
