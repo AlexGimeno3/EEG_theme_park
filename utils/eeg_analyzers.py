@@ -303,7 +303,7 @@ class MultiChannelAnalyzer(EEGAnalyzer):
         if req_param is not None and req_param.default is not inspect.Parameter.empty:
             required = req_param.default
         else:
-            required = 2  # fallback default
+            required = ""  # fallback default
 
         # If "all", no need to prompt
         if required == "all":
