@@ -72,6 +72,7 @@ class PlaygroundMode(Mode):
             signal_menu = tk.Menu(self._menubar, tearoff=0)
             self._menubar.add_cascade(label="Signal", menu=signal_menu)
             signal_menu.add_command(label="Switch channel", command=self.switch_channel_cmd)
+            signal_menu.add_command(label="Remove channels", command=self.remove_channels_cmd)
             signal_menu.add_command(label="Alter signal", command=self.alter_signal_cmd)
             signal_menu.add_command(label="Extract feature", command=self.analyze_signal_cmd)
             
@@ -97,6 +98,116 @@ class PlaygroundMode(Mode):
             self._update_display(time_series)
 
     #Utility functions ------------------
+    def remove_channels_cmd(self):
+        """Allow the user to permanently remove channels from the current signal."""
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue("No signal is loaded. Please load or build a signal first.")
+            return
+        available_channels = self.current_signal.all_channel_labels
+        if len(available_channels) <= 1:
+            gui_utilities.simple_dialogue(
+                f"This signal only has one channel ({available_channels[0]}), so there are no channels to remove.")
+            return
+
+        # Build dialogue window
+        dialogue = tk.Toplevel(self)
+        dialogue.title("Remove Channels")
+        dialogue.geometry("400x500")
+        dialogue.grab_set()
+        dialogue.lift()
+        dialogue.focus_force()
+
+        main_label = ttk.Label(dialogue, text="Select channels to permanently remove:")
+        main_label.pack(pady=10)
+
+        # Create frame for checkboxes with scrollbar
+        checkbox_frame_outer = ttk.Frame(dialogue)
+        checkbox_frame_outer.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        canvas = tk.Canvas(checkbox_frame_outer)
+        scrollbar = ttk.Scrollbar(checkbox_frame_outer, orient="vertical", command=canvas.yview)
+        checkbox_frame = ttk.Frame(canvas)
+
+        checkbox_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+        canvas.create_window((0, 0), window=checkbox_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        checkbox_vars = {}
+        for idx, name in enumerate(available_channels):
+            var = tk.BooleanVar(value=False)
+            checkbox_vars[name] = var
+            cb = ttk.Checkbutton(checkbox_frame, text=name, variable=var)
+            cb.grid(row=idx, column=0, sticky="w", padx=5, pady=2)
+
+        def submit():
+            channels_to_remove = [name for name, var in checkbox_vars.items() if var.get()]
+            if not channels_to_remove:
+                gui_utilities.simple_dialogue("No channels were selected for removal.")
+                return
+            # Ensure at least one channel remains
+            remaining = [ch for ch in available_channels if ch not in channels_to_remove]
+            if len(remaining) == 0:
+                gui_utilities.simple_dialogue("You cannot remove all channels. At least one channel must remain.")
+                return
+            # # Confirm with user
+            # confirm = gui_utilities.yes_no(
+            #     f"Are you sure you want to permanently remove the following channel(s)?\n\n"
+            #     f"{', '.join(channels_to_remove)}\n\n"
+            #     f"This action cannot be undone."
+            # )
+            # if not confirm:
+            #     return
+            dialogue.destroy()
+
+            # If current channel is being removed, switch first
+            if self.current_signal.current_channel in channels_to_remove:
+                self.current_signal.switch_channel(remaining[0])
+
+            # Remove from all_channel_data and all_channel_labels
+            for ch in channels_to_remove:
+                del self.current_signal.all_channel_data[ch]
+                self.current_signal.all_channel_labels.remove(ch)
+
+            # Clean up TimeSeries objects that have per-channel data
+            for ts in self.current_signal.time_series:
+                if ts.channel_data is not None:
+                    for ch in channels_to_remove:
+                        ts.channel_data.pop(ch, None)
+                    # If the TimeSeries's primary_channel was removed, reassign it
+                    if ts.primary_channel in channels_to_remove:
+                        if ts.channel_data:
+                            ts.primary_channel = next(iter(ts.channel_data))
+                        else:
+                            ts.primary_channel = None
+
+            self.current_signal.has_unsaved_changes = True
+            self.current_signal.log_text(f"Removed channel(s): {', '.join(channels_to_remove)}.")
+            self.update_display(time_series=self.view_timeseries)
+
+        # Select all / deselect all buttons
+        button_frame = ttk.Frame(dialogue)
+        button_frame.pack(pady=(0, 5))
+
+        def select_all():
+            for var in checkbox_vars.values():
+                var.set(True)
+
+        def deselect_all():
+            for var in checkbox_vars.values():
+                var.set(False)
+
+        ttk.Button(button_frame, text="Select all", command=select_all).pack(side="left", padx=5)
+        ttk.Button(button_frame, text="Deselect all", command=deselect_all).pack(side="left", padx=5)
+
+        submit_button = ttk.Button(dialogue, text="Remove Selected", command=submit)
+        submit_button.pack(pady=20)
+
+        dialogue.wait_window()
+    
     def switch_channel_cmd(self):
         """Allow the user to switch the active channel for the current signal."""
         if self.current_signal is None:
