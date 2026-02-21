@@ -31,6 +31,7 @@ class BatchProcessing(Mode):
             self.files_dir = Path(self.files_dir)
         self.channel_name = None #Channel we are analyzing
         self.sourcer = None #source marker for loading files
+        self._example_signal = None #Cached signal that is instantiated upon file directory instantiation
         self.events_excel_path = kwargs.get("excel_path", None)
         self.excel_path = self.events_excel_path
         self.event_names = kwargs.get("event_names", None)
@@ -132,6 +133,20 @@ class BatchProcessing(Mode):
         self.get_files_dir()
         if self.files_dir is not None:
             self.get_file_names()
+            # Load first file to cache channel, sourcer, and example signal
+            first_file = self.names_list[0] if self.names_list else None
+            if first_file is not None:
+                result = playground.file_commands.load_signal(
+                    file_path=first_file, file_name_bool=True,
+                    channel=self.channel_name, sourcer=self.sourcer
+                )
+                if result[0] is not None:
+                    self._example_signal = result[0]
+                    if self._example_signal.channel is not None:
+                        self.channel_name = self._example_signal.channel
+                    if self._example_signal.sourcer is not None:
+                        self.sourcer = self._example_signal.sourcer
+            #Get num files, etc
             num_files = len(self.names_list) if hasattr(self, 'names_list') else 0
             self.files_label.config(text=f"Selected: {self.files_dir} ({num_files} files)")
             # Enable extract features button if files are selected
@@ -139,7 +154,10 @@ class BatchProcessing(Mode):
             self.choose_events_btn.config(state='normal')
 
     def _get_available_channels(self):
-        """Load the first file in files_dir to extract available channel names."""
+        """Return available channel names, using cached example signal if possible."""
+        if self._example_signal is not None:
+            if hasattr(self._example_signal, 'all_channel_labels') and self._example_signal.all_channel_labels:
+                return list(self._example_signal.all_channel_labels)
         if self.files_dir is None:
             return None
         supported = loaders.AllLoaders.get_supported_extensions()
