@@ -170,7 +170,19 @@ def build_pipeline():
                 return
             
             # Instantiate the function
-            instance = fxn_class(**params_dict)
+            elif as_selection:
+                idx = as_selection[0]
+                name = as_listbox.get(idx)
+                analyzer_class = analyzer_dict[name]
+                
+                # Get parameters (channels, etc.) from user if needed
+                params = analyzer_class.get_params(eeg_object=None, parent=window)
+                if params is None:
+                    return
+                
+                instance = analyzer_class(**params)
+                cp_entries.append([name, instance])
+                cp_listbox.insert(tk.END, name)
             
             # Add to pipeline
             cp_entries.append([name, instance])

@@ -133,6 +133,22 @@ class AllAnalyzers:
     def get_analyzer_names(cls):
         return [analyzer.name for analyzer in cls._analyzers]
 
+    @classmethod
+    def get_params(cls, eeg_object=None, parent=None):
+        """
+        Collects any required instantiation parameters from the user via GUI.
+        Base implementation returns empty dict (no extra params needed).
+        Subclasses (e.g., MultiChannelAnalyzer) override as needed.
+
+        Inputs:
+        - eeg_object (EEGSignal or None): the signal, used to offer channel choices etc.
+        - parent (tkinter widget or None): parent window for dialogues
+
+        Outputs:
+        - dict of kwargs to pass to __init__, or None if the user cancelled.
+        """
+        return {}
+
 class SingleChannelAnalyzer(EEGAnalyzer):
     """
     Base class for analyzers that operate on one channel at a time.
@@ -263,6 +279,71 @@ class MultiChannelAnalyzer(EEGAnalyzer):
         """
         pass
 
+    @classmethod
+    def get_params(cls, eeg_object=None, parent=None):
+        """
+        Prompts the user to select which channels this multi-channel analyzer
+        should operate on, following the same pattern as EEGFunction.get_params.
+
+        Inputs:
+        - eeg_object (EEGSignal or None): signal whose channels are available for selection
+        - parent (tkinter widget or None): parent window for dialogues
+
+        Outputs:
+        - dict: {"channels": [list of selected channel name strings]}, or None if cancelled
+        """
+        from eeg_theme_park.utils.gui_utilities import dropdown_menu, simple_dialogue, text_entry
+
+        # Determine required number of channels from a temporary instance
+        temp = cls.__new__(cls)
+        # Pull required_num_channels from the class's __init__ defaults
+        import inspect
+        sig = inspect.signature(cls.__init__)
+        req_param = sig.parameters.get('required_num_channels', None)
+        if req_param is not None and req_param.default is not inspect.Parameter.empty:
+            required = req_param.default
+        else:
+            required = 2  # fallback default
+
+        # If "all", no need to prompt
+        if required == "all":
+            if eeg_object is not None:
+                return {"channels": list(eeg_object.all_channel_labels)}
+            else:
+                return {"channels": []}
+
+        # Build prompt text
+        if isinstance(required, int):
+            prompt = f"Select exactly {required} channel(s) for '{cls.name}':"
+        else:
+            prompt = f"Select channels for '{cls.name}':"
+
+        # If we have the signal, use dropdown; otherwise fall back to text entry
+        if eeg_object is not None:
+            available = eeg_object.all_channel_labels
+            selected = dropdown_menu(prompt, available, multiple=True, parent=parent)
+        else:
+            raw = text_entry(
+                f"{prompt}\nEnter channel names separated by commas:",
+                parent=parent
+            )
+            if raw is None:
+                return None
+            selected = [ch.strip() for ch in raw.split(",") if ch.strip()]
+
+        if selected is None or len(selected) == 0:
+            return None
+
+        # Validate count
+        if isinstance(required, int) and len(selected) != required:
+            simple_dialogue(
+                f"'{cls.name}' requires exactly {required} channel(s), "
+                f"but {len(selected)} were selected. Please try again."
+            )
+            return None
+
+        return {"channels": selected}
+    
     def _validate_channels(self, eeg_object):
         """Validate that self.channels is properly set and channels exist."""
         if len(self.channels) == 0:
