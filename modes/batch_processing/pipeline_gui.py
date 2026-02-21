@@ -38,12 +38,12 @@ def build_pipeline():
     all_functions = copy.deepcopy(signal_functions.AllFunctions._functions)
     fxn_names = [fxn.name for fxn in all_functions]
     if not len(fxn_names) == len(set(fxn_names)):
-        raise ValueError("Some of your functions in signal_functions.py have identical names. This will break the pipeline building. Please change the function names before proceeding.")
+        raise ValueError(f"Some of your functions in signal_functions.py have identical names. This will break the pipeline building. Please change the function names before proceeding. Specifically, the function names you have are {fxn_names}.")
     
     all_analyzers = copy.deepcopy(eeg_analyzers.AllAnalyzers._analyzers)
     analyzer_names = [analyzer.name for analyzer in all_analyzers]
     if not len(analyzer_names) == len(set(analyzer_names)):
-        raise ValueError("Some of your analyzers in eeg_analyzers.py have identical names. This will break the pipeline building. Please change the analyzer names before proceeding.")
+        raise ValueError(f"Some of your analyzers in eeg_analyzers.py have identical names. This will break the pipeline building. Please change the analyzer names before proceeding. Specifically, the analyzer names you have are {analyzer_names}.")
     
     # Create dictionaries for easy lookup
     fxn_dict = {fxn.name: fxn for fxn in all_functions}

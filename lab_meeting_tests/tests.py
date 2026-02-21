@@ -16,7 +16,7 @@ Any signal of frequency 2pif with initial amplitude Ai and final amplitude Af, i
 """
 
 def build_tests():
-    save_dir = Path(r"C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\tests\test_signals")
+    save_dir = Path(r"C:\Users\Alex_G\Proton Drive\agimeno310\My files\Personal Projects\Autodidact\eeg_theme_park\lab_meeting_tests\test_signals_new")
     #Battery 1: verify our functions and extracted statistics work on ideal data.
     #Test 1.1: verify the 8to10Hz function. Specifically, build a one-hour, 9 Hz signal with amplitude 10. Power is the time-averaged mean-squared value of the signal; for a sin wave, this comes out to A^2/2 (this can be derived). Therefore, power should be 50 uV^2.
     t1_1_signal_specs = {

@@ -10,7 +10,6 @@ from tqdm import tqdm
 from scipy.signal import hilbert
 import antropy as ant
 from scipy.signal.windows import dpss
-from scipy.signal import hilbert
 
 class EEGAnalyzer(ABC):
     """
@@ -37,8 +36,8 @@ class EEGAnalyzer(ABC):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        # Only register concrete classes (not SingleChannelAnalyzer/MultiChannelAnalyzer themselves)
-        if not getattr(cls, '__abstractmethods__', None):
+        # Only register if 'name' is a concrete string (not an abstract property)
+        if isinstance(cls.__dict__.get("name"), str):
             AllAnalyzers.add_to_analyzers(cls)
 
     def _get_analysis_range(self, eeg_object):
@@ -110,6 +109,29 @@ class EEGAnalyzer(ABC):
                         continue
                     yield start_i, end_i, window_signal, analyze_times[start_i]
 
+
+class AllAnalyzers:
+    """
+    Registry class that stores all the EEGAnalyzers we've coded thus far. This will be useful for generating a menu of function options based on the functions we have coded.
+    """
+    _analyzers = [] #List of EEGAnalyzer subclasses
+    
+    @classmethod
+    def add_to_analyzers(cls, Analyzer):
+        """
+        Function to add a given EEGAnalyzer subclass (e.g., DeltaPower) to AllAnalyzers._functions
+
+        Inputs:
+        - Analyzer (EEGAnalyzer subclass): EEGAnalyzer subclass to add
+
+        Outputs:
+        None.
+        """
+        cls._analyzers.append(Analyzer)
+    
+    @classmethod
+    def get_analyzer_names(cls):
+        return [analyzer.name for analyzer in cls._analyzers]
 
 class SingleChannelAnalyzer(EEGAnalyzer):
     """
@@ -363,29 +385,6 @@ class MultiChannelAnalyzer(EEGAnalyzer):
         new_ts = TimeSeries(**params_dict)
         eeg_object.time_series.append(new_ts)
         return eeg_object
-
-class AllAnalyzers:
-    """
-    Registry class that stores all the EEGAnalyzers we've coded thus far. This will be useful for generating a menu of function options based on the functions we have coded.
-    """
-    _analyzers = [] #List of EEGAnalyzer subclasses
-    
-    @classmethod
-    def add_to_analyzers(cls, Analyzer):
-        """
-        Function to add a given EEGAnalyzer subclass (e.g., DeltaPower) to AllAnalyzers._functions
-
-        Inputs:
-        - Analyzer (EEGAnalyzer subclass): EEGAnalyzer subclass to add
-
-        Outputs:
-        None.
-        """
-        cls._analyzers.append(Analyzer)
-    
-    @classmethod
-    def get_analyzer_names(cls):
-        return [analyzer.name for analyzer in cls._analyzers]
     
 class Power8to10Hz(SingleChannelAnalyzer):
     """"
