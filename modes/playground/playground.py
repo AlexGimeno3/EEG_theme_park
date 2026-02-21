@@ -600,13 +600,19 @@ class PlaygroundMode(Mode):
         if analyzer_choice is None:
             analyzers = self.get_analyzer()
             for analyzer in analyzers:
-                analyzer_inst = analyzer()
+                params = analyzer.get_params(eeg_object=self.current_signal, parent=self)
+                if params is None:
+                    continue  # User cancelled channel selection
+                analyzer_inst = analyzer(**params)
                 self.current_signal.time_series = [ts for ts in self.current_signal.time_series if ts.name != analyzer_inst.name]
-                analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)  # Pass clean_segments
+                analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)
         else:
-            analyzer_inst = analyzer_choice()
+            params = analyzer_choice.get_params(eeg_object=self.current_signal, parent=self)
+            if params is None:
+                return  # User cancelled
+            analyzer_inst = analyzer_choice(**params)
             self.current_signal.time_series = [ts for ts in self.current_signal.time_series if ts.name != analyzer_inst.name]
-            analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)  # Pass clean_segments
+            analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)
             
         self.update_display()
 
