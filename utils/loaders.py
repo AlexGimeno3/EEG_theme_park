@@ -254,7 +254,6 @@ class EDFLoader(EEGLoader):
         NB: accepts "channel" and "sourcer" from kwargs. channel is the EEG channel we are using, while sourcer is a string that specifies what protocol we should use to gather flags. "unspecified" for sourcer will not prompt any flag retrieval
         """
         channel = kwargs.get('channel', None)
-        auto_select_channel = kwargs.get('auto_select_channel', False)
         sourcer = kwargs.get("sourcer", None)  # Get cached value
         if not channel is None:
             channel = channel.upper()
@@ -269,7 +268,7 @@ class EDFLoader(EEGLoader):
             eeg_picks = mne.pick_types(raw.info, eeg=True)
             channel_names = [raw.ch_names[i].upper() for i in eeg_picks]
             channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
-            all_data = raw.get_data(picks="eeg") *1e6  # shape: (n_channels, n_samples)
+            all_data = raw.get_data(picks="eeg") * 1e6  # shape: (n_channels, n_samples)
             
             # Build all_channel_data dict
             all_channel_data = {}
@@ -288,6 +287,7 @@ class EDFLoader(EEGLoader):
                 "all_channel_data": all_channel_data,
                 "all_channel_labels": channel_names,
                 "start_time": start_time,
+                "datetime_collected":recording_start,
                 "flags": {},
                 "log": ""
             }
