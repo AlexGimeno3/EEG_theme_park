@@ -277,9 +277,12 @@ class EDFLoader(EEGLoader):
                 all_channel_data[ch_name] = all_data[i, :]
             
             start_time = raw.first_time
+            recording_start = raw.info['meas_date']
             channel_name = channel
             eeg_specs = {
+                "name": file_name,
                 "channel": channel_name,
+                "sourcer":sourcer,
                 "srate": srate,
                 "data": all_channel_data[channel_name],  # primary channel data
                 "all_channel_data": all_channel_data,
