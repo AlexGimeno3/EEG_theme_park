@@ -125,60 +125,6 @@ class EEGThemeParkLoader(EEGLoader):
     @staticmethod #To allow for class calling without an instance when determining whether or not this loader is appropriate for the given file
     def get_supported_extensions():
         return [".pkl"]
-    
-
-class BDFLoader(EEGLoader):
-    def load(self, file_path: Path, **kwargs) -> EEGSignal:
-        """
-        NB: accepts "channel" from kwargs
-        """
-        channel = kwargs.get('channel', None)
-        if not channel is None:
-            channel = channel.upper()
-        
-        extension = file_path.suffix #Get the file extension of file_path (including the period) as a string
-        if not extension in self.get_supported_extensions():
-            pass
-        else:
-            raw = mne.io.read_raw_bdf(file_path, preload=False, verbose=False)
-            srate = raw.info['sfreq']
-            channel_names = [name.upper() for name in raw.ch_names]
-            print(channel_names)
-            channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
-            data = raw.get_data(picks="eeg")
-            data = data[channel_i, :]
-            start_time = raw.first_time
-            channel_name = channel
-            eeg_specs = {
-                "channel":channel_name,
-                "srate":srate,
-                "data":data,
-                "start_time":start_time,
-                "flags":{},
-                "log":""
-            }
-            eeg_signal_obj = EEGSignal(**eeg_specs)
-            
-            for i in range(len(raw.annotations)):
-                name = raw.annotations.description[i]
-                onset = raw.annotations.onset[i]
-                duration = raw.annotations.duration[i]
-                
-                if duration == 0:
-                    # One-off marker
-                    times = [onset]
-                else:
-                    # Duration event
-                    times = [onset, onset + duration]
-                
-                eeg_signal_obj.add_flag(name, times)
-
-            return (eeg_signal_obj,file_path)
-    
-    @staticmethod #To allow for class calling without an instance when determining whether or not this loader is appropriate for the given file
-    def get_supported_extensions():
-        return [".bdf"]
-    
 
 class EDFLoader(EEGLoader):
     global sourcers 
@@ -318,29 +264,29 @@ class EDFLoader(EEGLoader):
         if not extension in self.get_supported_extensions():
             pass
         else:            
-            raw = mne.io.read_raw_edf(file_path, preload=False, verbose=False)
+            raw = mne.io.read_raw_edf(file_path, preload=True, verbose=False)
             srate = raw.info['sfreq']
-            channel_names = [name.upper() for name in raw.ch_names]
+            eeg_picks = mne.pick_types(raw.info, eeg=True)
+            channel_names = [raw.ch_names[i].upper() for i in eeg_picks]
             channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
-
-            #Load the data
-            original_channel_name = raw.ch_names[channel_i]
-            data = raw.get_data(picks=[original_channel_name]) * 1e6
-            data = data[0, :]  # Extract the single channel (now it's the first row)
-
+            all_data = raw.get_data(picks="eeg")  # shape: (n_channels, n_samples)
+            
+            # Build all_channel_data dict
+            all_channel_data = {}
+            for i, ch_name in enumerate(channel_names):
+                all_channel_data[ch_name] = all_data[i, :]
+            
             start_time = raw.first_time
-            recording_start = raw.info['meas_date']
             channel_name = channel
             eeg_specs = {
-                "name":file_name,
-                "channel":channel_name,
-                "sourcer":sourcer,
-                "srate":srate,
-                "data":data,
-                "start_time":start_time,
-                "datetime_collected":recording_start,
-                "flags":{},
-                "log":""
+                "channel": channel_name,
+                "srate": srate,
+                "data": all_channel_data[channel_name],  # primary channel data
+                "all_channel_data": all_channel_data,
+                "all_channel_labels": channel_names,
+                "start_time": start_time,
+                "flags": {},
+                "log": ""
             }
             eeg_signal_obj = EEGSignal(**eeg_specs)
             

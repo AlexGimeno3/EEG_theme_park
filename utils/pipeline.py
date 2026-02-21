@@ -130,20 +130,29 @@ class Pipeline:
                 if not self.ever_run:
                     self.pipeline_log += f"\nApplied function {func.name} with specs {func.args_dict}"
             
-            # Step 2: After all functions, find final clean segments and mark short ones as NaN
-            clean_segments = None
+            # Step 2: After all functions, find final clean segments PER CHANNEL and mark short ones as NaN
+            clean_segments = None  # Will become a dict {ch_name: [(start, end), ...]}
             if self.min_clean_length > 0:
-                clean_segments = find_clean_segments(eeg_signal.data, eeg_signal.srate, self.min_clean_length)
+                clean_segments = {}
+                original_channel = eeg_signal.current_channel
+
+                for ch_name in eeg_signal.all_channel_labels:
+                    ch_data = eeg_signal.all_channel_data[ch_name]
+                    ch_segs = find_clean_segments(ch_data, eeg_signal.srate, self.min_clean_length)
+                    clean_segments[ch_name] = ch_segs
+
+                    # Mark all data NOT in clean segments as NaN for this channel
+                    mask = np.ones(len(ch_data), dtype=bool)
+                    for start, end in ch_segs:
+                        mask[start:end] = False
+                    eeg_signal.all_channel_data[ch_name][mask] = np.nan
+
+                eeg_signal.current_channel = original_channel
                 
-                # Mark all data NOT in clean segments as NaN
-                mask = np.ones(len(eeg_signal.data), dtype=bool)
-                for start, end in clean_segments:
-                    mask[start:end] = False
-                eeg_signal.data[mask] = np.nan
-                
-                # Calculate statistics for logging
+                # Calculate statistics for logging (using primary channel as representative)
+                primary_segs = clean_segments.get(eeg_signal.current_channel, [])
                 total_samples = len(eeg_signal.data)
-                clean_samples = sum(end - start for start, end in clean_segments)
+                clean_samples = sum(end - start for start, end in primary_segs)
                 clean_pct = 100 * clean_samples / total_samples if total_samples > 0 else 0
                 
                 if not self.ever_run:

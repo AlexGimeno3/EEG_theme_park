@@ -14,12 +14,25 @@ class EEGSignal:
 
         Inputs:
         - signal_specs (dict): a dictionary containing the following keys: "srate", "data", "start_time", "flags", "log"
+          Optional: "all_channel_data" (dict {ch_name: np.array}), "all_channel_labels" (list of str)
         """
         self.name = signal_specs.get("name","unnamed")
         self.channel = signal_specs.get("channel", "unspecified")
         self.sourcer = signal_specs.get("sourcer","unspecified")
-        self.data = np.asarray(signal_specs["data"])
-        self.original_data = copy.deepcopy(self.data) #Initial data in case the user ever wants to compare after filtering, noising, etc
+        
+        # Multi-channel support
+        if "all_channel_data" in signal_specs:
+            self.all_channel_data = {k: np.asarray(v) for k, v in signal_specs["all_channel_data"].items()}
+            self.all_channel_labels = signal_specs.get("all_channel_labels", list(self.all_channel_data.keys()))
+        else:
+            # Backward-compatible: build from single-channel data
+            single_data = np.asarray(signal_specs["data"])
+            ch_name = signal_specs.get("channel", "unspecified")
+            self.all_channel_data = {ch_name: single_data}
+            self.all_channel_labels = [ch_name]
+        
+        self.current_channel = self.channel  # The user-selected primary channel
+        
         self.start_time = signal_specs["start_time"]
         self.datetime_collected = signal_specs.get("datetime_collected", dt.datetime(2000, 1, 1, 0, 0, 0)) #Actual time that the recording began
         self.srate = signal_specs["srate"]
@@ -35,6 +48,38 @@ class EEGSignal:
         current_datetime = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log += f"[{current_datetime}] EEG file initialized using the specifications {signal_specs}\n\n"
 
+    @property
+    def data(self):
+        return self.all_channel_data[self.current_channel]
+
+    @data.setter
+    def data(self, value):
+        self.all_channel_data[self.current_channel] = np.asarray(value)
+
+    def switch_channel(self, new_channel):
+        """
+        Switch the primary channel. Updates current_channel and propagates
+        primary_channel to all multi-channel TimeSeries objects.
+        
+        Inputs:
+        - new_channel (str): channel name to switch to (must be in all_channel_labels)
+        """
+        if new_channel not in self.all_channel_labels:
+            raise ValueError(f"Channel '{new_channel}' not found. Available channels: {self.all_channel_labels}")
+        self.current_channel = new_channel
+        self.channel = new_channel
+        # Update end_time and times based on new channel's data length
+        self.end_time = self.start_time + len(self.data) / self.srate
+        self.times = np.linspace(start=self.start_time, stop=self.end_time, num=len(self.data), endpoint=False)
+        # Propagate to all TimeSeries
+        for ts in self.time_series:
+            if ts.channel_data is not None:
+                if new_channel in ts.channel_data:
+                    ts.primary_channel = new_channel
+                # If the channel isn't in this TimeSeries's channel_data,
+                # leave primary_channel unchanged (it will still return
+                # data for whatever channel it was last set to)
+    
     def __setattr__(self, name, value):
         #Rewritten so changes to data are automatically logged; this allows users to add functions to eeg_functions.py without needing to add a .log() step in every one.
         if name == "data" and hasattr(self, "data"):
@@ -248,27 +293,77 @@ class EEGSignal:
 
 class TimeSeries:
     """
-    Each intstantiation of this class is both derived from and belongs to single EEGSiganl instance; these TimeSeries objects will be stored in each EEGSignal in the EEGSignal.time_series list.  
+    Each instantiation of this class is both derived from and belongs to a single EEGSignal instance; these TimeSeries objects will be stored in each EEGSignal in the EEGSignal.time_series list.
+
+    Multi-channel support:
+    - If channel_data is None, this is a legacy/single-value TimeSeries (e.g., from a multi-channel analyzer like coherence). values and times are simple arrays.
+    - If channel_data is populated, it is a dict of the form {ch_name: {"values": np.array, "times": np.array}} containing per-channel results. The `values` and `times` properties route to the entry corresponding to `primary_channel`.
     """
     def __init__(self, **timeseries_specs):
         """
         Inputs
-        - timeseries_specs: must include "name" (str, name of the extracted variable), "values" (float, the values of the extracted variable), "units" (str, the units for the extracted variable), "times" (foat, the times in ms that each value was recorded at); optional are "function" (stores the function object used to create the timeseries; good for reproducibility but heavier on storage)
+        - timeseries_specs: must include "name", "values", "units", "times", "function".
+          Optional: "channel_data" (dict), "primary_channel" (str).
         """
-        #Quality checks and initialization
-        necessary_keys = ["name","values","units","times","function"]
-        if not all([key in timeseries_specs.keys() for key in necessary_keys]):
-            raise ValueError(f"To build an EEGTimeSeries object, you must have at least the keys {necessary_keys}. However, the keys you passed were {timeseries_specs.keys()}")
+        necessary_keys = ["name", "values", "units", "times", "function"]
+        if not all(key in timeseries_specs.keys() for key in necessary_keys):
+            raise ValueError(f"To build a TimeSeries object, you must have at least the keys {necessary_keys}. However, the keys you passed were {list(timeseries_specs.keys())}")
+        
         self.name = timeseries_specs["name"]
-        if len(self.name)>0:
-            name = self.name
-        self.values = np.asarray(timeseries_specs["values"])
+        self._values = np.asarray(timeseries_specs["values"])
         self.units = timeseries_specs["units"].lower()
-        self.times = np.asarray(timeseries_specs["times"])
+        self._times = np.asarray(timeseries_specs["times"])
         self.function = timeseries_specs["function"]
+        
+        # Multi-channel support
+        self.channel_data = timeseries_specs.get("channel_data", None)  # {ch_name: {"values": np.array, "times": np.array}} or None
+        self.primary_channel = timeseries_specs.get("primary_channel", None)
 
-        if not len(self.times)==len(self.values):
-            raise ValueError(f"Each value in the timeseries should have an associated time; however, there were {len(timeseries_specs["values"])} values and {len(timeseries_specs["times"])} times.")
+        if self.channel_data is None:
+            if len(self._times) != len(self._values):
+                raise ValueError(f"Each value in the timeseries should have an associated time; however, there were {len(self._values)} values and {len(self._times)} times.")
+
+    @property
+    def values(self):
+        if self.channel_data is not None and self.primary_channel is not None:
+            return self.channel_data[self.primary_channel]["values"]
+        return self._values
+
+    @values.setter
+    def values(self, new_values):
+        if self.channel_data is not None and self.primary_channel is not None:
+            self.channel_data[self.primary_channel]["values"] = np.asarray(new_values)
+        else:
+            self._values = np.asarray(new_values)
+
+    @property
+    def times(self):
+        if self.channel_data is not None and self.primary_channel is not None:
+            return self.channel_data[self.primary_channel]["times"]
+        return self._times
+
+    @times.setter
+    def times(self, new_times):
+        if self.channel_data is not None and self.primary_channel is not None:
+            self.channel_data[self.primary_channel]["times"] = np.asarray(new_times)
+        else:
+            self._times = np.asarray(new_times)
+
+    def get_channel_values(self, channel_name):
+        """Retrieve the values array for a specific channel."""
+        if self.channel_data is None:
+            raise ValueError("No multi-channel data stored in this TimeSeries.")
+        if channel_name not in self.channel_data:
+            raise KeyError(f"Channel '{channel_name}' not found. Available: {list(self.channel_data.keys())}")
+        return self.channel_data[channel_name]["values"]
+
+    def get_channel_times(self, channel_name):
+        """Retrieve the times array for a specific channel."""
+        if self.channel_data is None:
+            raise ValueError("No multi-channel data stored in this TimeSeries.")
+        if channel_name not in self.channel_data:
+            raise KeyError(f"Channel '{channel_name}' not found. Available: {list(self.channel_data.keys())}")
+        return self.channel_data[channel_name]["times"]
     
     @property
     def data(self):

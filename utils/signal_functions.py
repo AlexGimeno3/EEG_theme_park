@@ -48,9 +48,10 @@ class EEGFunction(ABC):
         super().__init_subclass__(**kwargs)
         AllFunctions.add_to_functions(cls)
     
-    def apply(self, eeg_object, time_range=None, flags_bool=True, min_clean_length = 0):
+    def apply(self, eeg_object, time_range=None, flags_bool=True, min_clean_length=0):
         """
         Template method to apply the given function to a signal.
+        Loops over ALL channels in eeg_object.all_channel_data.
 
         Inputs:
         - eeg_object (EEGSignal object): EEGSignal object
@@ -63,41 +64,50 @@ class EEGFunction(ABC):
         """
         # Determine time range to process
         if time_range is None:
-            # Check if analyze_time_lims is set
             if len(eeg_object.analyze_time_lims) > 0:
                 time_range = [eeg_object.analyze_time_lims[0], eeg_object.analyze_time_lims[1]]
             else:
                 time_range = [eeg_object.times[0], eeg_object.times[-1]]
-        
+
         try:
             start_idx = eeg_object.time_to_index(time_range[0])
             end_idx = eeg_object.time_to_index(time_range[1])
         except Exception as e:
-            raise type(e)(f"{str(e)}; the time range you asked to apply the function to was {time_range[0]}-{time_range[1]} secs, but the signal only goes from {eeg_object.start_time} to {eeg_object.end_time} secs.") from e
+            raise type(e)(
+                f"{str(e)}; the time range you asked to apply the function to was "
+                f"{time_range[0]}-{time_range[1]} secs, but the signal only goes from "
+                f"{eeg_object.start_time} to {eeg_object.end_time} secs."
+            ) from e
 
-        if min_clean_length > 0:
-            from eeg_theme_park.utils.pipeline import find_clean_segments
-            data_to_process = eeg_object.data[start_idx:end_idx+1]
-            clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
-            
-            processed_data = np.full_like(data_to_process, np.nan)
-            
-            for seg_start, seg_end in clean_segments:
-                segment_data = data_to_process[seg_start:seg_end]
-                processed_segment = self._apply_function(segment_data, eeg_object)
-                processed_data[seg_start:seg_end] = processed_segment
-            
-            eeg_object.data[start_idx:end_idx+1] = processed_data     
-        
-        else:
-            data_to_process = eeg_object.data[start_idx:end_idx+1]
-            edited_data = self._apply_function(data_to_process, eeg_object)
-            eeg_object.data[start_idx:end_idx+1] = edited_data
-        
+        original_channel = eeg_object.current_channel  # Save to restore
+
+        for ch_name in eeg_object.all_channel_labels:
+            eeg_object.current_channel = ch_name  # Routes eeg_object.data to this channel
+
+            if min_clean_length > 0:
+                from eeg_theme_park.utils.pipeline import find_clean_segments
+                data_to_process = eeg_object.data[start_idx:end_idx + 1]
+                clean_segments = find_clean_segments(data_to_process, eeg_object.srate, min_clean_length)
+
+                processed_data = np.full_like(data_to_process, np.nan)
+                for seg_start, seg_end in clean_segments:
+                    segment_data = data_to_process[seg_start:seg_end]
+                    processed_segment = self._apply_function(segment_data, eeg_object)
+                    processed_data[seg_start:seg_end] = processed_segment
+
+                eeg_object.data[start_idx:end_idx + 1] = processed_data
+            else:
+                data_to_process = eeg_object.data[start_idx:end_idx + 1]
+                edited_data = self._apply_function(data_to_process, eeg_object)
+                eeg_object.data[start_idx:end_idx + 1] = edited_data
+
+        eeg_object.current_channel = original_channel  # Restore
+
+        # Add flag once (not per channel)
         if flags_bool:
             eeg_object.add_flag(self.name, copy.deepcopy(time_range))
         eeg_object.has_unsaved_changes = True
-        
+
         return eeg_object
 
     

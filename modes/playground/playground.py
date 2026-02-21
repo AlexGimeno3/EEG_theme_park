@@ -452,11 +452,14 @@ class PlaygroundMode(Mode):
         clean_segments = None
         if self.min_clean_time > 0:
             from eeg_theme_park.utils.pipeline import find_clean_segments
-            clean_segments = find_clean_segments(
-                self.current_signal.data, 
-                self.current_signal.srate, 
-                self.min_clean_time
-            )
+            clean_segments = {}
+            for ch_name in self.current_signal.all_channel_labels:
+                ch_data = self.current_signal.all_channel_data[ch_name]
+                clean_segments[ch_name] = find_clean_segments(
+                    ch_data,
+                    self.current_signal.srate,
+                    self.min_clean_time
+                )
         
         if analyzer_choice is None:
             analyzers = self.get_analyzer()
