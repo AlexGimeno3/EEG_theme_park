@@ -259,7 +259,7 @@ class EEGSignal:
                     # It's a numeric value (float/int)
                     flag_str = f"{flag_time:.3f}s (signal-relative)"
                 
-                raise ValueError(f"Flag time {flag_str} (converts to signal time {signal_time:.3f}s) is not close to any sample point. Closest sample is at {closest_time:.3f}s (difference: {abs(closest_time - signal_time):.4f}s, tolerance: {tolerance:.4f}s)")
+                raise ValueError(f"Flag time {flag_str} (converts to signal time {signal_time:.3f}s) is not close to any sample point. Closest sample is at {closest_time:.3f}s (difference: {abs(closest_time - signal_time):.4f}s, tolerance: {tolerance:.4f}s). The signal's begins at {self.datetime_collected}.")
             
             converted_times.append(closest_time)
         
