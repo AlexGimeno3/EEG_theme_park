@@ -93,12 +93,13 @@ class BatchProcessing(Mode):
         self.events_label = ttk.Label(events_frame, text="No events selected - will analyze entire signals")
         self.events_label.pack(pady=5)
         
-        choose_events_btn = ttk.Button(
+        self.choose_events_btn = ttk.Button(
             events_frame,
             text="Choose Events",
-            command=self._choose_events_command
+            command=self._choose_events_command,
+            state='disabled'
         )
-        choose_events_btn.pack(pady=5)
+        self.choose_events_btn.pack(pady=5)
         
         # 3. Extract Features section
         extract_frame = ttk.LabelFrame(main_frame, text="3. Extract Features", padding=15)
@@ -135,7 +136,34 @@ class BatchProcessing(Mode):
             self.files_label.config(text=f"Selected: {self.files_dir} ({num_files} files)")
             # Enable extract features button if files are selected
             self.extract_features_btn.config(state='normal')
+            self.choose_events_btn.config(state='normal')
 
+    def _get_available_channels(self):
+        """Load the first file in files_dir to extract available channel names."""
+        if self.files_dir is None:
+            return None
+        supported = loaders.AllLoaders.get_supported_extensions()
+        for f in self.files_dir.iterdir():
+            if f.is_file() and f.suffix in supported:
+                try:
+                    eeg_signal = playground.file_commands.load_signal(
+                        file_path=f, file_name_bool=True, 
+                        channel=self.channel_name, sourcer=self.sourcer,
+                        auto_select_channel=True
+                    )[0]
+                    if hasattr(eeg_signal, 'all_channel_labels') and eeg_signal.all_channel_labels:
+                        # Cache channel and sourcer while we're at it
+                        if eeg_signal.channel is not None:
+                            self.channel_name = eeg_signal.channel
+                        if eeg_signal.sourcer is not None:
+                            self.sourcer = eeg_signal.sourcer
+                        return list(eeg_signal.all_channel_labels)
+                except Exception as e:
+                    print(f"Could not extract channels from {f}: {e}")
+                    continue
+        return None
+
+    
     def _choose_events_command(self):
         """Command handler for Choose Events button"""
         # Ask user which method they want to use
@@ -218,7 +246,8 @@ class BatchProcessing(Mode):
     def _extract_features_command(self):
         """Command handler for Extract Features button"""
         if self.pipeline is None:
-            self.pipeline = build_pipeline()
+            available_channels = self._get_available_channels()
+            self.pipeline = build_pipeline(available_channels=available_channels)
         
         if self.pipeline is not None:
             # Update label to show pipeline is being used
@@ -243,7 +272,8 @@ class BatchProcessing(Mode):
         """
         # Step 1: Get our pipeline
         if self.pipeline is None:
-            self.pipeline = build_pipeline()
+            available_channels = self._get_available_channels()
+            self.pipeline = build_pipeline(available_channels=available_channels)
         
         # Step 2: Initialize our results and error excels
         self.initialize_excel()

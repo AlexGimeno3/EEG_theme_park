@@ -10,7 +10,7 @@ import inspect
 import pickle
 from tkinter import filedialog
 
-def build_pipeline():
+def build_pipeline(available_channels=None):
     """
     Function that opens up a GUI for the user to build their own Pipeline object. Specifically, this will have three tkinter List Boxes, a >> button, a << button, and a submit button. The leftmost will be called "Current Pipeline" (CP), the middle will be called "Transform Signal" (TS), and the last will be called "Analyze Signal" (AS). The TS box will be populated by all names in fxn_names, while the AS box will be populated by all names in analyzer_names. Then, I want the user to be able to highlight a name in TS or AS and then, by clicking a << button, have it added to the bottom of the list of names in CP. CP will be represented by an array of arrays cp_entries, where each member is of the form [name, object]. Name should be the function name displayed, while object should be the instantiated version of the object (see below). 
      
@@ -150,58 +150,52 @@ def build_pipeline():
     
     def add_to_pipeline():
         """Add selected item from TS or AS to CP"""
-        # Check which listbox has a selection
         ts_selection = ts_listbox.curselection()
         as_selection = as_listbox.curselection()
         
         if ts_selection:
-            # Get the selected function name
             idx = ts_selection[0]
             name = ts_listbox.get(idx)
-            
-            # Get the function class
             fxn_class = fxn_dict[name]
             
-            # Get parameters from user
             params_dict = get_params_gui(fxn_class, window)
-            
             if params_dict is None:
-                # User cancelled parameter entry
                 return
             
-            # Instantiate the function
-            elif as_selection:
-                idx = as_selection[0]
-                name = as_listbox.get(idx)
-                analyzer_class = analyzer_dict[name]
-                
-                # Get parameters (channels, etc.) from user if needed
-                params = analyzer_class.get_params(eeg_object=None, parent=window)
-                if params is None:
-                    return
-                
-                instance = analyzer_class(**params)
-                cp_entries.append([name, instance])
-                cp_listbox.insert(tk.END, name)
-            
-            # Add to pipeline
+            instance = fxn_class(**params_dict)
             cp_entries.append([name, instance])
             cp_listbox.insert(tk.END, name)
             
         elif as_selection:
-            # Get the selected analyzer name
             idx = as_selection[0]
             name = as_listbox.get(idx)
-            
-            # Get the analyzer class
             analyzer_class = analyzer_dict[name]
             
-            # Instantiate directly (no parameters needed)
-            instance = analyzer_class()
+            # Check if this is a MultiChannelAnalyzer that needs channel selection
+            if issubclass(analyzer_class, eeg_analyzers.MultiChannelAnalyzer):
+                if available_channels is not None and len(available_channels) > 0:
+                    # Create a lightweight stand-in so get_params can use its dropdown path
+                    class _ChannelProxy:
+                        pass
+                    proxy = _ChannelProxy()
+                    proxy.all_channel_labels = available_channels
+                    params = analyzer_class.get_params(eeg_object=proxy, parent=window)
+                else:
+                    # Fall back to text entry (get_params handles eeg_object=None)
+                    params = analyzer_class.get_params(eeg_object=None, parent=window)
+                
+                if params is None:
+                    return
+                instance = analyzer_class(**params)
+            else:
+                # Regular (single-channel) analyzer — check if it needs params too
+                params_dict = get_params_gui(analyzer_class, window)
+                if params_dict is None:
+                    return
+                instance = analyzer_class(**params_dict)
             
-            # Add to pipeline
             cp_entries.append([name, instance])
-            cp_listbox.insert(tk.END, name)
+            cp_listbox.insert(tk.END, instance.display_name if hasattr(instance, 'display_name') else name)
         else:
             gui_utilities.simple_dialogue("Please select an item from Transform Signal or Analyze Signal first.")
     
