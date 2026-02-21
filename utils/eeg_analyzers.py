@@ -452,6 +452,7 @@ class InterChannelDifference(MultiChannelAnalyzer):
     """
     name = "inter_channel_difference"
     units = "µV"  # assuming EEG amplitude units; adjust if needed
+    time_details = {"window_length":30, "advance_time":15}
 
     def __init__(self, channels=None, **kwargs):
         super().__init__(channels=channels, required_num_channels=2, **kwargs)

@@ -269,7 +269,7 @@ class EDFLoader(EEGLoader):
             eeg_picks = mne.pick_types(raw.info, eeg=True)
             channel_names = [raw.ch_names[i].upper() for i in eeg_picks]
             channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
-            all_data = raw.get_data(picks="eeg")  # shape: (n_channels, n_samples)
+            all_data = raw.get_data(picks="eeg") *1e6  # shape: (n_channels, n_samples)
             
             # Build all_channel_data dict
             all_channel_data = {}
