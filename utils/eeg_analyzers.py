@@ -254,7 +254,7 @@ class MultiChannelAnalyzer(EEGAnalyzer):
 
     channel_mode = "multi"
 
-    def __init__(self, channels=None, required_num_channels=2, **kwargs):
+    def __init__(self, channels=None, required_num_channels="", **kwargs):
         """
         Inputs:
         - channels (list of str or None): channel names to use. If None, must be set before apply().
