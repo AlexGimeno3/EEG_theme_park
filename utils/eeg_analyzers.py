@@ -438,3 +438,31 @@ class EdgeFrequency(SingleChannelAnalyzer):
             sef = main_spectral(window_signal, srate, "spectral_edge_frequency", pass_params)
             return sef
             #----------------------
+
+class InterChannelDifference(MultiChannelAnalyzer):
+    """
+    A basic multi-channel analyzer that computes the mean absolute difference
+    between two channels at each time point within a window.
+    
+    For a window of N samples from channels A and B, this returns:
+        mean(|A[i] - B[i]|) for i in 0..N-1
+    
+    This gives a single scalar per window summarizing how much the two
+    channels diverge on average during that period.
+    """
+    name = "inter_channel_difference"
+    units = "µV"  # assuming EEG amplitude units; adjust if needed
+
+    def __init__(self, channels=None, **kwargs):
+        super().__init__(channels=channels, required_num_channels=2, **kwargs)
+
+    def _apply_function_multi(self, window_signals, eeg_object, **kwargs):
+        """
+        Inputs:
+        - window_signals (np.array): shape (2, n_window_samples)
+        - eeg_object (EEGSignal): parent signal
+        
+        Returns:
+        - float: mean absolute difference between the two channels in this window
+        """
+        return float(np.mean(np.abs(window_signals[0] - window_signals[1])))

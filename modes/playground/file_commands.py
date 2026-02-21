@@ -83,12 +83,11 @@ def load_signal(choose: bool = False, file_path: path = None, file_name_bool = N
     if choose or file_path is None: #Allow user to specify file_path
         # Get supported extensions and format for filetypes
         supported_extensions = AllLoaders.get_supported_extensions()
-        filetypes = [(f"{ext.upper()} files", f"*{ext}") for ext in supported_extensions]
-        filetypes.append(("All files", "*.*"))
-        
+        filetypes = [("All files", "*.*")]
+        filetypes.extend([(f"{ext.upper()} files", f"*{ext}") for ext in supported_extensions])
+
         file_path = Path(filedialog.askopenfilename(
             parent=file_path,
-            defaultextension=supported_extensions[0] if supported_extensions else ".pkl",
             filetypes=filetypes,
             initialdir=path.cwd(),
             title="Load EEG Signal"

@@ -11,6 +11,7 @@ import copy
 import numpy as np
 from eeg_theme_park.modes.mode_manager import Mode, ModeManager
 from eeg_theme_park.utils import eeg_analyzers, signal_functions, gui_utilities
+from eeg_theme_park.utils.gui_utilities import choose_channel
 
 class PlaygroundMode(Mode):
     """
@@ -70,6 +71,7 @@ class PlaygroundMode(Mode):
             #Signal menu
             signal_menu = tk.Menu(self._menubar, tearoff=0)
             self._menubar.add_cascade(label="Signal", menu=signal_menu)
+            signal_menu.add_command(label="Switch channel", command=self.switch_channel_cmd)
             signal_menu.add_command(label="Alter signal", command=self.alter_signal_cmd)
             signal_menu.add_command(label="Extract feature", command=self.analyze_signal_cmd)
             
@@ -95,6 +97,29 @@ class PlaygroundMode(Mode):
             self._update_display(time_series)
 
     #Utility functions ------------------
+    def switch_channel_cmd(self):
+        """Allow the user to switch the active channel for the current signal."""
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue("No signal is loaded. Please load or build a signal first.")
+            return
+        available_channels = self.current_signal.all_channel_labels
+        if len(available_channels) <= 1:
+            gui_utilities.simple_dialogue(
+                f"This signal only has one channel ({available_channels[0]}), so there is nothing to switch to.")
+            return
+
+        selection = choose_channel(available_channels)
+        if selection is None:
+            return
+        new_channel_name, _ = selection
+        if new_channel_name == self.current_signal.current_channel:
+            gui_utilities.simple_dialogue(f"'{new_channel_name}' is already the active channel.")
+            return
+        old_channel = self.current_signal.current_channel
+        self.current_signal.switch_channel(new_channel_name)
+        self.current_signal.log_text(f"Active channel switched from {old_channel} to {new_channel_name}.")
+        self.update_display()
+    
     def view_signal_info_cmd(self):
         """Display signal information in a formatted dialog."""
         if self.current_signal is None:
