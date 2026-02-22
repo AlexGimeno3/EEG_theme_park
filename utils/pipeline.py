@@ -45,6 +45,7 @@ class Pipeline:
     Pipeline class. This is a class that contains all the steps to take data from raw EEG files to a final Excel.
     """
     analyzer_statistics = [
+        {'key': 'mean', 'suffix': 'mean', 'unit_transform': lambda u: u},
         {'key': 'median', 'suffix': 'median', 'unit_transform': lambda u: u},
         {'key': 'iqr', 'suffix': 'IQR', 'unit_transform': lambda u: u},
         {'key': 'theil_sen_slope', 'suffix': 'TSS', 'unit_transform': lambda u: f"{u}/sec" if u else "per sec"},
@@ -176,6 +177,7 @@ class Pipeline:
                 my_ts_times = my_ts_times[mask]
                 
                 if len(my_ts_data) > 0:
+                    mean_val = np.mean(my_ts_data)
                     median_val = np.median(my_ts_data)
                     q75, q25 = np.percentile(my_ts_data, [75, 25])
                     iqr_val = q75 - q25
@@ -184,6 +186,7 @@ class Pipeline:
                     mkt_result = kendalltau(my_ts_times, my_ts_data)
                     mkt_val = mkt_result.correlation
                 else:
+                    mean_val = np.nan
                     median_val = np.nan
                     iqr_val = np.nan
                     TSS_val = np.nan
@@ -191,6 +194,7 @@ class Pipeline:
                 
                 result_dict = {
                     'analyzer_name': analyzer.name,
+                    'mean': mean_val,
                     'median': median_val,
                     'iqr': iqr_val,
                     'theil_sen_slope': TSS_val,
