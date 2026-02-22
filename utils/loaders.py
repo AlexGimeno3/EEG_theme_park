@@ -252,6 +252,12 @@ class EDFLoader(EEGLoader):
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
         """
         NB: accepts "channel" and "sourcer" from kwargs. channel is the EEG channel we are using, while sourcer is a string that specifies what protocol we should use to gather flags. "unspecified" for sourcer will not prompt any flag retrieval
+        
+        Inputs:
+        - file_path (Path object): full file name as a path object
+
+        Outputs:
+        - (eeg_signal_obj, file_path): as a tuple, the EEGSignal object and the original file path
         """
         channel = kwargs.get('channel', None)
         sourcer = kwargs.get("sourcer", None)  # Get cached value
