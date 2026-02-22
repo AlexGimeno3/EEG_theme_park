@@ -770,7 +770,7 @@ class RelativeBeta1Power(MultiChannelAnalyzer):
         fpass  = [1 40] Hz
         pad    = -1     →  no zero-padding (NFFT = window length)
     """
-    name = "relative_theta_power"
+    name = "relative_beta1_power"
     units = "ratio"
     time_details = {"window_length": 30, "advance_time": 15}
 
@@ -839,7 +839,7 @@ class RelativeBeta2Power(MultiChannelAnalyzer):
         fpass  = [1 40] Hz
         pad    = -1     →  no zero-padding (NFFT = window length)
     """
-    name = "relative_theta_power"
+    name = "relative_beta2_power"
     units = "ratio"
     time_details = {"window_length": 30, "advance_time": 15}
 
@@ -908,7 +908,7 @@ class AveragePower(MultiChannelAnalyzer):
         fpass  = [1 40] Hz
         pad    = -1     →  no zero-padding (NFFT = window length)
     """
-    name = "relative_theta_power"
+    name = "average_power"
     units = "ratio"
     time_details = {"window_length": 30, "advance_time": 15}
 
