@@ -965,3 +965,57 @@ class AveragePower(MultiChannelAnalyzer):
 
         rdp = np.mean(all_channels_S[total_in_fpass])
         return float(rdp)
+    
+class AveragePowerSimple(MultiChannelAnalyzer):
+    """
+    Mean spectral power in 1–40 Hz, averaged across all channels.
+    Uses Welch's method for simplicity.
+    """
+    name = "average_power_simple"
+    units = "uV^2/Hz"
+    time_details = {"window_length": 30, "advance_time": 15}
+
+    def __init__(self, channels=None, **kwargs):
+        super().__init__(channels=channels, required_num_channels="all", **kwargs)
+
+    def _apply_function_multi(self, window_signals, eeg_object, **kwargs):
+        from scipy.signal import welch
+
+        srate = eeg_object.srate
+        n_channels = window_signals.shape[0]
+        ch_powers = np.zeros(n_channels)
+
+        for ch in range(n_channels):
+            freqs, psd = welch(window_signals[ch, :], fs=srate,
+                               nperseg=min(window_signals.shape[1], 2 * int(srate)))
+            mask = (freqs >= 1) & (freqs <= 40)
+            ch_powers[ch] = np.mean(psd[mask])
+
+        return float(np.mean(ch_powers))
+    
+class DeltaPowerSimple(MultiChannelAnalyzer):
+    """
+    Mean spectral power in 1–40 Hz, averaged across all channels.
+    Uses Welch's method for simplicity.
+    """
+    name = "delta_power_simple"
+    units = "uV^2/Hz"
+    time_details = {"window_length": 30, "advance_time": 15}
+
+    def __init__(self, channels=None, **kwargs):
+        super().__init__(channels=channels, required_num_channels="all", **kwargs)
+
+    def _apply_function_multi(self, window_signals, eeg_object, **kwargs):
+        from scipy.signal import welch
+
+        srate = eeg_object.srate
+        n_channels = window_signals.shape[0]
+        ch_powers = np.zeros(n_channels)
+
+        for ch in range(n_channels):
+            freqs, psd = welch(window_signals[ch, :], fs=srate,
+                               nperseg=min(window_signals.shape[1], 2 * int(srate)))
+            mask = (freqs >= 1) & (freqs <= 4)
+            ch_powers[ch] = np.mean(psd[mask])
+
+        return float(np.mean(ch_powers))
