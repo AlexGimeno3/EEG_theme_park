@@ -352,8 +352,8 @@ class MultiChannelAnalyzer(EEGAnalyzer):
                 f"Available channels: {eeg_object.all_channel_labels}"
             )
         
-        # Resolve "all"
-        if self.required_num_channels == "all":
+        # Resolve "all". Note that previously passed channels will be retained here
+        if self.required_num_channels == "all" and len(self.channels) == 0:
             self.channels = list(eeg_object.all_channel_labels)
         
         # Validate count
