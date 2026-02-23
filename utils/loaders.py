@@ -64,7 +64,9 @@ class EEGLoader(ABC):
         
         # Normalize provided channel
         if provided_channel is not None:
-            provided_channel = provided_channel.upper()
+            for i, name in enumerate(channel_names):
+                if name.upper() == provided_channel.upper():
+                    return (name, i)
         
         # Check if provided channel is valid
         if provided_channel and provided_channel in channel_names:
