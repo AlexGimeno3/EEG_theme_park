@@ -325,3 +325,70 @@ class EDFLoader(EEGLoader):
     def get_supported_extensions():
         return [".edf"]
 
+class EEGLABLoader(EEGLoader):
+    
+    def load(self, file_path: Path, **kwargs) -> EEGSignal:
+        
+        provided_channel = kwargs.get("channel", None)
+        
+        # MNE reads the .set file and automatically locates the companion .fdt
+        raw = mne.io.read_raw_eeglab(str(file_path), preload=True)
+        
+        srate = raw.info['sfreq']
+        channel_names = raw.ch_names
+        
+        # Build all_channel_data dict
+        all_channel_data = {}
+        for i, ch_name in enumerate(channel_names):
+            all_channel_data[ch_name] = raw.get_data(picks=[i])[0]  # 1D array in volts
+        
+        # Channel selection (uses the inherited helper)
+        selected_channel_name, selected_channel_idx = self.get_channel(
+            channel_names, provided_channel=provided_channel, **kwargs
+        )
+        
+        # Extract start time / datetime from MNE info
+        meas_date = raw.info.get('meas_date', None)
+        if meas_date is not None:
+            if hasattr(meas_date, 'timestamp'):  # datetime object
+                datetime_collected = meas_date.replace(tzinfo=None) if meas_date.tzinfo else meas_date
+            else:
+                datetime_collected = dt.datetime(2000, 1, 1, 0, 0, 0)
+        else:
+            datetime_collected = dt.datetime(2000, 1, 1, 0, 0, 0)
+        
+        # Extract events/annotations as flags
+        flags = {}
+        annotations = raw.annotations
+        if annotations is not None and len(annotations) > 0:
+            for ann in annotations:
+                label = ann['description']
+                onset_sec = ann['onset']
+                duration = ann.get('duration', 0.0)
+                if duration > 0:
+                    flags[label] = [onset_sec, onset_sec + duration, False]
+                else:
+                    flags[label] = [onset_sec]
+        
+        # Build signal_specs
+        signal_specs = {
+            "name": file_path.stem,
+            "channel": selected_channel_name,
+            "srate": srate,
+            "data": all_channel_data[selected_channel_name],
+            "start_time": 0,
+            "datetime_collected": datetime_collected,
+            "flags": flags,
+            "log": [],
+            "all_channel_data": all_channel_data,
+            "all_channel_labels": channel_names,
+        }
+        
+        eeg_signal_obj = EEGSignal(**signal_specs)
+        
+        return (eeg_signal_obj, file_path)
+    
+    @staticmethod
+    def get_supported_extensions():
+        return [".set"]
+
