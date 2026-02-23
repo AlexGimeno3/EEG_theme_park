@@ -11,6 +11,7 @@ import mne
 from mne._fiff import utils
 from eeg_theme_park.utils.gui_utilities import choose_channel, yes_no, text_entry
 from eeg_theme_park.utils.misc_utils import get_datetime_from_excel
+import numpy as np
 
 class EEGLoader(ABC):
     """
@@ -331,16 +332,32 @@ class EEGLABLoader(EEGLoader):
         
         provided_channel = kwargs.get("channel", None)
         
-        # MNE reads the .set file and automatically locates the companion .fdt
-        raw = mne.io.read_raw_eeglab(str(file_path), preload=True)
+        # Try raw first; if the file contains epochs, fall back to epochs reader
+        try:
+            raw = mne.io.read_raw_eeglab(str(file_path), preload=True)
+            is_epoched = False
+        except TypeError:
+            epochs = mne.io.read_epochs_eeglab(str(file_path))
+            epochs.load_data()
+            is_epoched = True
         
-        srate = raw.info['sfreq']
-        channel_names = raw.ch_names
+        if is_epoched:
+            info = epochs.info
+            channel_names = epochs.ch_names
+            # Concatenate epochs: (n_epochs, n_channels, n_times) -> (n_channels, n_total_samples)
+            epoch_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
+            concatenated = np.concatenate(epoch_data, axis=-1)  # (n_channels, n_total_samples)
+            all_channel_data = {}
+            for i, ch_name in enumerate(channel_names):
+                all_channel_data[ch_name] = concatenated[i]
+        else:
+            info = raw.info
+            channel_names = raw.ch_names
+            all_channel_data = {}
+            for i, ch_name in enumerate(channel_names):
+                all_channel_data[ch_name] = raw.get_data(picks=[i])[0]
         
-        # Build all_channel_data dict
-        all_channel_data = {}
-        for i, ch_name in enumerate(channel_names):
-            all_channel_data[ch_name] = raw.get_data(picks=[i])[0]  # 1D array in volts
+        srate = info['sfreq']
         
         # Channel selection (uses the inherited helper)
         selected_channel_name, selected_channel_idx = self.get_channel(
@@ -348,7 +365,8 @@ class EEGLABLoader(EEGLoader):
         )
         
         # Extract start time / datetime from MNE info
-        meas_date = raw.info.get('meas_date', None)
+        meas_date = info.get('meas_date', None)
+
         if meas_date is not None:
             if hasattr(meas_date, 'timestamp'):  # datetime object
                 datetime_collected = meas_date.replace(tzinfo=None) if meas_date.tzinfo else meas_date
@@ -359,7 +377,42 @@ class EEGLABLoader(EEGLoader):
         
         # Extract events/annotations as flags
         flags = {}
-        annotations = raw.annotations
+        if is_epoched:
+            info = epochs.info
+            channel_names = epochs.ch_names
+            epoch_data = epochs.get_data()  # (n_epochs, n_channels, n_times)
+            n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
+            srate = info['sfreq']
+
+            # epochs.events[:, 0] are sample indices in the original raw recording
+            # epochs.tmin is the offset (in seconds) before the event
+            tmin_samples = int(round(epochs.tmin * srate))
+            epoch_starts = epochs.events[:, 0] + tmin_samples  # absolute sample index of each epoch's first sample
+
+            # Total length: from first epoch start to end of last epoch
+            total_samples = (epoch_starts[-1] + n_times_per_epoch) - epoch_starts[0]
+
+            # Initialize with NaN and fill in epoch data at correct positions
+            full_data = np.full((n_channels, total_samples), np.nan)
+            offset = epoch_starts[0]  # baseline so first epoch starts at index 0
+            for i in range(n_epochs):
+                start_idx = epoch_starts[i] - offset
+                full_data[:, start_idx:start_idx + n_times_per_epoch] = epoch_data[i]
+
+            all_channel_data = {}
+            for i, ch_name in enumerate(channel_names):
+                all_channel_data[ch_name] = full_data[i]
+
+            # Flags: mark each epoch boundary
+            flags = {}
+            for i in range(n_epochs):
+                event_id = str(epochs.events[i, 2])
+                onset_sec = (epoch_starts[i] - offset) / srate
+                flags[f"{event_id}_epoch{i}"] = [onset_sec]
+
+            annotations = None
+        else:
+            annotations = raw.annotations
         if annotations is not None and len(annotations) > 0:
             for ann in annotations:
                 label = ann['description']
