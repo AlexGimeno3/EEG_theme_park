@@ -395,25 +395,27 @@ class EEGLABLoader(EEGLoader):
 
             all_channel_data = {}
             for i, ch_name in enumerate(channel_names):
-                all_channel_data[ch_name] = full_data[i]
+                all_channel_data[ch_name] = full_data[i] * 1e6
 
             # Invert event_id mapping: {int_code: "label_string"}
             id_to_label = {v: k for k, v in epochs.event_id.items()}
 
             # Flags: mark each event at its true position and each epoch window
             flags = {}
-            for i in range(n_epochs):
-                int_code = epochs.events[i, 2]
-                label = id_to_label.get(int_code, str(int_code))
+            
+            #Code to shade epochs; omitted, as it was cluttering up the flags view
+            # for i in range(n_epochs):
+            #     int_code = epochs.events[i, 2]
+            #     label = id_to_label.get(int_code, str(int_code))
 
-                # Point event at the actual event position
-                event_sample = epochs.events[i, 0] - offset
-                flags[f"{label}_epoch{i}"] = [event_sample / srate]
+            #     # Point event at the actual event position
+            #     event_sample = epochs.events[i, 0] - offset
+            #     flags[f"{label}_epoch{i}"] = [event_sample / srate]
 
-                # Epoch window as a shaded range
-                epoch_start_sec = (epoch_starts[i] - offset) / srate
-                epoch_end_sec = epoch_start_sec + (n_times_per_epoch / srate)
-                flags[f"{label}_epoch{i}_window"] = [epoch_start_sec, epoch_end_sec, True]
+            #     # Epoch window as a shaded range
+            #     epoch_start_sec = (epoch_starts[i] - offset) / srate
+            #     epoch_end_sec = epoch_start_sec + (n_times_per_epoch / srate)
+            #     flags[f"{label}_epoch{i}_window"] = [epoch_start_sec, epoch_end_sec, True]
 
             annotations = None
         else:
