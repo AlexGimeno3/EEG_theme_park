@@ -446,15 +446,15 @@ class BatchProcessing(Mode):
         chosen_files_dir = gui_utilities.choose_dir("Please choose the folder where you have the EEG files you would like to analyze.")
         if chosen_files_dir is None:
             return None
-        all_files = [f for f in os.listdir(chosen_files_dir) if os.path.isfile(os.path.join(chosen_files_dir, f))]
-        unsupported_files = [f for f in all_files if not any(f.endswith(ext) for ext in self.supported_extensions)]
-        if unsupported_files:
-            cont_bool = gui_utilities.simple_dialogue(
-                f"Please note that the folder you select must contain only supported EEG files; it may not contain any other files. Currently, the formats {self.supported_extensions} are supported. Would you like to try again? (Yes to choose again, No to close this window).")
+        supported_files = [f for f in os.listdir(chosen_files_dir) if os.path.isfile(os.path.join(chosen_files_dir, f)) and any(f.endswith(ext) for ext in self.supported_extensions)]
+        if not supported_files:
+            cont_bool = gui_utilities.yes_no(
+                f"No supported EEG files were found in this directory. Currently supported formats are {self.supported_extensions}. Would you like to try again?")
             if cont_bool:
                 return self.get_files_dir()
-        else:
-            self.files_dir = chosen_files_dir
+            else:
+                return None
+        self.files_dir = chosen_files_dir
         return None
 
     def initialize_excel(self):
