@@ -151,7 +151,7 @@ def choose_channel(channels_list, auto_select=False, parent=None):
     - out_list (list): list in the form [a: str, b: int], where a is the name (in all uppercase) of the chosen channel and b is the index of a in channels_list
     """
     if auto_select:
-        return [channels_list[0].upper(), 0]
+        return [channels_list[0], 0]
     
     out_list = None
     selected_index = tk.IntVar(value=-1)
@@ -160,7 +160,7 @@ def choose_channel(channels_list, auto_select=False, parent=None):
         nonlocal out_list
         idx = selected_index.get()
         if idx >= 0:
-            out_list = [channels_list[idx].upper(), idx]
+            out_list = [channels_list[idx], idx]
             dialogue.destroy()
     
     dialogue = tk.Toplevel(parent)
@@ -195,7 +195,7 @@ def choose_channel(channels_list, auto_select=False, parent=None):
     for i, channel in enumerate(channels_list):
         rb = ttk.Radiobutton(
             scrollable_frame,
-            text=channel.upper(),
+            text=channel.upper(), #NB: the displays are upper, but the return value is the original channel name
             variable=selected_index,
             value=i
         )
