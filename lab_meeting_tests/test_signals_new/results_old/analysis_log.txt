@@ -4,4 +4,5 @@ Clean segment analysis (min length = 20.0s):
   - Found 1 clean segments
   - Clean data: 100.0% of signal
   - Marked segments shorter than 20.0s as NaN
-Applied analyzer 8_10_average_power_simple with specs {}
+Applied analyzer average_power_simple with specs {}
+Applied analyzer average_power with specs {}
