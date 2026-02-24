@@ -989,7 +989,7 @@ class AveragePowerSimple(MultiChannelAnalyzer):
             freqs, psd = welch(window_signals[ch, :], fs=srate,
                                nperseg=min(window_signals.shape[1], 2 * int(srate)))
             mask = (freqs >= 1) & (freqs <= 40)
-            ch_powers[ch] = np.trapz(psd[mask], freqs[mask])
+            ch_powers[ch] = np.mean(psd[mask])
 
         return float(np.mean(ch_powers))
     
@@ -1016,6 +1016,6 @@ class DeltaPowerSimple(MultiChannelAnalyzer):
             freqs, psd = welch(window_signals[ch, :], fs=srate,
                                nperseg=min(window_signals.shape[1], 2 * int(srate)))
             mask = (freqs >= 1) & (freqs <= 4)
-            ch_powers[ch] = np.trapz(psd[mask], freqs[mask])
+            ch_powers[ch] = np.mean(psd[mask])
 
         return float(np.mean(ch_powers))
