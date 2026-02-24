@@ -62,12 +62,6 @@ class EEGLoader(ABC):
         """
         auto_select = kwargs.get('auto_select_channel', False)
         
-        # Normalize provided channel
-        if provided_channel is not None:
-            for i, name in enumerate(channel_names):
-                if name.upper() == provided_channel.upper():
-                    return (name, i)
-        
         # Check if provided channel is valid
         if provided_channel and provided_channel in channel_names:
             return (provided_channel, channel_names.index(provided_channel))
@@ -264,8 +258,6 @@ class EDFLoader(EEGLoader):
         """
         channel = kwargs.get('channel', None)
         sourcer = kwargs.get("sourcer", None)  # Get cached value
-        if not channel is None:
-            channel = channel.upper()
         
         extension = file_path.suffix
         file_name = file_path.stem
@@ -275,7 +267,7 @@ class EDFLoader(EEGLoader):
             raw = mne.io.read_raw_edf(file_path, preload=True, verbose=False)
             srate = raw.info['sfreq']
             eeg_picks = mne.pick_types(raw.info, eeg=True)
-            channel_names = [raw.ch_names[i].upper() for i in eeg_picks]
+            channel_names = [raw.ch_names[i] for i in eeg_picks]
             channel, channel_i = self.get_channel(channel_names, kwargs.get('channel'), **kwargs)
             all_data = raw.get_data(picks="eeg") * 1e6  # shape: (n_channels, n_samples)
             
