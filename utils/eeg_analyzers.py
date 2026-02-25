@@ -1027,28 +1027,28 @@ class RelativeDeltaPowerSimple(MultiChannelAnalyzer):
     def __init__(self, channels=None, **kwargs):
         super().__init__(channels=channels, required_num_channels="all", **kwargs)
     
-        def _apply_function_multi(self, window_signals, eeg_object, **kwargs):
-            from scipy.signal import welch
+    def _apply_function_multi(self, window_signals, eeg_object, **kwargs):
+        from scipy.signal import welch
 
-            srate = eeg_object.srate
-            n_channels = window_signals.shape[0]
-            delta_ch_powers = np.zeros(n_channels)
+        srate = eeg_object.srate
+        n_channels = window_signals.shape[0]
+        delta_ch_powers = np.zeros(n_channels)
 
-            #Get delta power
-            for ch in range(n_channels):
-                freqs, psd = welch(window_signals[ch, :], fs=srate, nperseg=min(window_signals.shape[1], 2 * int(srate)), return_onesided=False)
-                mask = (freqs >= 1) & (freqs <= 4)
-                delta_ch_powers[ch] = np.mean(psd[mask])/2
-            delta_power = float(np.mean(delta_ch_powers))
+        #Get delta power
+        for ch in range(n_channels):
+            freqs, psd = welch(window_signals[ch, :], fs=srate, nperseg=min(window_signals.shape[1], 2 * int(srate)), return_onesided=False)
+            mask = (freqs >= 1) & (freqs <= 4)
+            delta_ch_powers[ch] = np.mean(psd[mask])/2
+        delta_power = float(np.mean(delta_ch_powers))
 
-            #Get total power
-            total_ch_powers = np.zeros(n_channels)
-            for ch in range(n_channels):
-                freqs, psd = welch(window_signals[ch, :], fs=srate, nperseg=min(window_signals.shape[1], 2 * int(srate)), return_onesided=False)
-                mask = (freqs >= 1) & (freqs <= 40)
-                total_ch_powers[ch] = np.mean(psd[mask])
+        #Get total power
+        total_ch_powers = np.zeros(n_channels)
+        for ch in range(n_channels):
+            freqs, psd = welch(window_signals[ch, :], fs=srate, nperseg=min(window_signals.shape[1], 2 * int(srate)), return_onesided=False)
+            mask = (freqs >= 1) & (freqs <= 40)
+            total_ch_powers[ch] = np.mean(psd[mask])
 
-            total_power = float(np.mean(total_ch_powers))
+        total_power = float(np.mean(total_ch_powers))
 
-            return delta_power/total_power
+        return delta_power/total_power
 
