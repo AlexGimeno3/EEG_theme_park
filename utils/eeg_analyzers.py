@@ -1051,4 +1051,3 @@ class RelativeDeltaPowerSimple(MultiChannelAnalyzer):
         total_power = float(np.mean(total_ch_powers))
 
         return delta_power/total_power
-
