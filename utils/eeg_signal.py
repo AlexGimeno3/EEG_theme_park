@@ -306,7 +306,7 @@ class TimeSeries:
         - timeseries_specs: must include "name", "values", "units", "times", "function".
           Optional: "channel_data" (dict), "primary_channel" (str).
         """
-        necessary_keys = ["name", "values", "units", "times", "function"]
+        necessary_keys = ["name", "values", "units", "times", "srate", "function"]
         if not all(key in timeseries_specs.keys() for key in necessary_keys):
             raise ValueError(f"To build a TimeSeries object, you must have at least the keys {necessary_keys}. However, the keys you passed were {list(timeseries_specs.keys())}")
         
@@ -315,6 +315,7 @@ class TimeSeries:
         self.units = timeseries_specs["units"].lower()
         self._times = np.asarray(timeseries_specs["times"])
         self.function = timeseries_specs["function"]
+        self.srate = timeseries_specs["srate"]
         
         # Multi-channel support
         self.channel_data = timeseries_specs.get("channel_data", None)  # {ch_name: {"values": np.array, "times": np.array}} or None
