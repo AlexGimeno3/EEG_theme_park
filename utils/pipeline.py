@@ -129,7 +129,10 @@ class Pipeline:
             for func in functions:
                 eeg_signal = func.apply(eeg_signal, time_range=None, min_clean_length=self.min_clean_length)
                 if not self.ever_run:
-                    self.pipeline_log += f"\nApplied function {func.name} with specs {func.args_dict}"
+                    log_entry = f"\nApplied analyzer {analyzer.name} with specs {analyzer.args_dict}"
+                    if hasattr(analyzer, 'channels') and analyzer.channels:
+                        log_entry += f" on channels {analyzer.channels}"
+                    self.pipeline_log += log_entry
             
             # Step 2: After all functions, find final clean segments PER CHANNEL and mark short ones as NaN
             clean_segments = None  # Will become a dict {ch_name: [(start, end), ...]}

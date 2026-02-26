@@ -569,6 +569,7 @@ class PlaygroundMode(Mode):
             self.min_clean_time = float(gui_utilities.text_entry("What is the minimum amount of consecutive clean signal you want to be considered for processing an analysis?"))
         fxn, lims = self.get_functions()
         self.current_signal = fxn.apply(self.current_signal, time_range=lims, flags_bool=True, min_clean_length=self.min_clean_time)
+        self.current_signal.log_text(f"Applied function {fxn.name} with specs {fxn.args_dict} on time range {lims[0]:.3f}-{lims[1]:.3f} sec.")
         #Now, we need to re-run all our analyses on the new data
         analyzers = eeg_analyzers.AllAnalyzers._analyzers
         for analyzer in analyzers:
@@ -1124,6 +1125,44 @@ class PlaygroundMode(Mode):
             print(f"Output length: {len(downsampled_data)}")
             return downsampled_times, downsampled_data
         
+        #Helper function to insert nan values into TimeSeries visualizations based on srate
+        def _insert_gap_nans(times, values, srate):
+            """
+            Detect temporal gaps in a time series and insert NaN values so that
+            matplotlib breaks the plotted line instead of connecting across gaps.
+            Uses the TimeSeries sampling rate (derived from the analyzer's advance_time)
+            to determine the expected step size.
+            """
+            if len(times) < 2:
+                return times, values
+            
+            times = np.asarray(times, dtype=float)
+            values = np.asarray(values, dtype=float)
+            
+            expected_step = 1.0 / srate
+            gap_threshold = 1.5 * expected_step
+            
+            diffs = np.diff(times)
+            gap_indices = np.where(diffs > gap_threshold)[0]
+            
+            if len(gap_indices) == 0:
+                return times.tolist(), values.tolist()
+            
+            new_times = []
+            new_values = []
+            prev = 0
+            for gi in gap_indices:
+                new_times.extend(times[prev:gi + 1])
+                new_values.extend(values[prev:gi + 1])
+                # Insert a NaN point midway through the gap
+                new_times.append((times[gi] + times[gi + 1]) / 2)
+                new_values.append(np.nan)
+                prev = gi + 1
+            new_times.extend(times[prev:])
+            new_values.extend(values[prev:])
+            
+            return new_times, new_values
+        
         # Filter data based on time_lims
         if len(self.display_time_lims) == 0: #Display entire signal if no time_lims specified
             plot_times = EEG_times
@@ -1166,6 +1205,15 @@ class PlaygroundMode(Mode):
             
             #Downsample timeseries if needed
             ts_plot_times, ts_plot_values = downsample_data(ts_plot_times, ts_plot_values)
+            
+            # Insert NaNs at temporal gaps so matplotlib breaks the line
+            # (analyzers skip noisy windows entirely, leaving gaps rather than NaN placeholders)
+            ts_plot_times, ts_plot_values = _insert_gap_nans(ts_plot_times, ts_plot_values, ts.srate)
+            
+            # Use different color for each time series
+            color = f'C{idx}'  # matplotlib color cycle (C0, C1, C2, etc.)
+            axes[idx].plot(ts_plot_times, ts_plot_values, color=color, linewidth=0.5)
+            
             # Use different color for each time series
             color = f'C{idx}'  # matplotlib color cycle (C0, C1, C2, etc.)
             axes[idx].plot(ts_plot_times, ts_plot_values, color=color, linewidth=0.5)

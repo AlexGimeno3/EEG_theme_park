@@ -234,6 +234,7 @@ class SingleChannelAnalyzer(EEGAnalyzer):
             "function": self if keep_fxn else None,
             "channel_data": channel_data_dict,
             "primary_channel": eeg_object.current_channel,
+            "srate": 1 / self.time_details["advance_time"],
         }
 
         new_ts = TimeSeries(**params_dict)
@@ -460,6 +461,7 @@ class MultiChannelAnalyzer(EEGAnalyzer):
             "units": self.units,
             "times": ts_times,
             "function": self if keep_fxn else None,
+            "srate": 1 / self.time_details["advance_time"],
             # Multi-channel analyzers produce a single TimeSeries, no channel_data
         }
 
