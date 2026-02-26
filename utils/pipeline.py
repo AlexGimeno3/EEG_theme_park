@@ -168,6 +168,12 @@ class Pipeline:
                         f"\n  - Marked segments shorter than {self.min_clean_length}s as NaN"
                     )
             
+            print(f"[DEBUG] min_clean_length = {self.min_clean_length}")
+            print(f"[DEBUG] clean_segments is None: {clean_segments is None}")
+            if clean_segments is not None:
+                for ch, segs in clean_segments.items():
+                    print(f"[DEBUG] Channel '{ch}': {len(segs)} clean segments, total clean samples = {sum(e-s for s,e in segs)}")
+            
             # Step 3: Apply all EEGAnalyzers (pass clean_segments)
             results_arr = []
             for analyzer in analyzers:

@@ -440,6 +440,9 @@ class MultiChannelAnalyzer(EEGAnalyzer):
         else:
             merged_clean = self._adjust_clean_segments(clean_segments, global_offset, analyze_length)
 
+        print(f"[DEBUG MultiCh] merged_clean is None: {merged_clean is None}")
+        print(f"[DEBUG MultiCh] merged_clean length: {len(merged_clean) if merged_clean is not None else 'N/A'}")
+
         # Use the first channel's data as the reference for window iteration
         # (all channels have the same length, so window positions are the same)
         ref_data = list(ch_data_arrays.values())[0]
