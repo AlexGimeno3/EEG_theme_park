@@ -39,17 +39,20 @@ class EEGVisualizer(ABC):
 
     def apply(self, eeg_object, time_range=None):
         """
-        Resolve time range then delegate to _visualize().
-        Does not modify eeg_object.
+        Resolve time range, pull channel data, delegate to _visualize(),
+        then handle saving and display. Subclasses never touch Tkinter.
 
         Inputs:
         - eeg_object (EEGSignal): signal to visualize
-        - time_range (list or None): [start, end] in seconds. If None,
-          falls back to analyze_time_lims, then full signal.
+        - time_range (list or None): [start, end] in seconds
 
         Returns:
         - eeg_object (EEGSignal): unchanged
         """
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+        import tkinter as tk
+
         if time_range is None:
             if len(eeg_object.analyze_time_lims) > 0:
                 time_range = [eeg_object.analyze_time_lims[0],
@@ -60,18 +63,67 @@ class EEGVisualizer(ABC):
         start_idx = eeg_object.time_to_index(time_range[0])
         end_idx = eeg_object.time_to_index(time_range[1])
 
-        self._visualize(eeg_object, start_idx, end_idx, time_range)
+        # Resolve channel
+        ch = self.channel if self.channel else eeg_object.current_channel
+        if ch not in eeg_object.all_channel_data:
+            simple_dialogue(
+                f"Channel '{ch}' not found. "
+                f"Available: {eeg_object.all_channel_labels}")
+            return eeg_object
+
+        data = eeg_object.all_channel_data[ch][start_idx:end_idx + 1]
+        srate = eeg_object.srate
+
+        # Build figure (not attached to pyplot manager)
+        figsize = self.figsize if hasattr(self, 'figsize') else (12, 4)
+        fig = Figure(figsize=figsize, dpi=100, facecolor='#FAFAFA')
+
+        # Delegate to subclass
+        self._visualize(fig, data, srate, eeg_object, ch, time_range)
+
+        fig.tight_layout()
+
+        # Save if requested
+        if hasattr(self, 'save_path') and self.save_path is not None:
+            ext = self.ext if hasattr(self, 'ext') else '.png'
+            dpi = self.dpi if hasattr(self, 'dpi') else 300
+            save_full = (Path(self.save_path)
+                         / f"{eeg_object.name}_{ch}_{self.name.replace(' ', '_').lower()}{ext}")
+            fig.savefig(save_full, dpi=dpi, bbox_inches='tight',
+                        facecolor=fig.get_facecolor())
+            print(f"Figure saved to {save_full}")
+
+        # Display in its own Tk window (never triggers plt.show)
+        if hasattr(self, 'display') and self.display == 1:
+            viz_window = tk.Toplevel()
+            viz_window.title(f"{self.name} — {eeg_object.name} — {ch}")
+            viz_window.geometry(
+                f"{int(figsize[0] * 100)}x{int(figsize[1] * 100) + 50}")
+
+            canvas = FigureCanvasTkAgg(fig, master=viz_window)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+            toolbar = NavigationToolbar2Tk(canvas, viz_window)
+            toolbar.update()
+        else:
+            plt.close(fig)
+
         return eeg_object
 
     @abstractmethod
-    def _visualize(self, eeg_object, start_idx, end_idx, time_range):
+    def _visualize(self, fig, data, srate, eeg_object, channel, time_range):
         """
-        Produce the visualization.
+        Produce the visualization by drawing on the provided Figure.
+        Subclasses should add axes, plot data, set labels, etc.
 
         Inputs:
-        - eeg_object (EEGSignal): signal (read-only)
-        - start_idx (int): start sample index
-        - end_idx (int): end sample index (inclusive)
+        - fig (matplotlib.figure.Figure): empty figure to draw on
+        - data (np.array): 1D signal data for the selected channel and time range
+                           (may contain NaNs)
+        - srate (float): sampling rate in Hz
+        - eeg_object (EEGSignal): full signal object (read-only, for metadata)
+        - channel (str): name of the channel being visualized
         - time_range (list): [start_sec, end_sec]
         """
         pass
@@ -181,8 +233,47 @@ class AllVisualizers:
 
 
 # ---------------------------------------------------------------------------
-# Concrete visualizer: Power Spectral Density
+# Concrete visualizers
 # ---------------------------------------------------------------------------
+
+class ViewSpectrogram(EEGVisualizer):
+    name = "View spectrogram"
+    params_units_dict = {"save_path": "directory or None", "ext": "", "dpi": "dots per inch",
+                         "figsize": "inches (w, h)", "display": "0 or 1"}
+
+    def __init__(self, channel=None, save_path=None, ext=".png", dpi=300,
+                 figsize=(12, 4), display=0, **kwargs):
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')}
+        super().__init__(**params, **kwargs)
+        self.__dict__.update(params)
+        if isinstance(self.figsize, str):
+            self.figsize = tuple(float(x.strip()) for x in self.figsize.strip("()").split(","))
+        self.dpi = int(self.dpi)
+        self.display = int(self.display)
+
+    # get_params inherited from ViewPSD's pattern or overridden as needed
+
+    def _visualize(self, fig, data, srate, eeg_object, channel, time_range):
+        from scipy.signal import spectrogram as scipy_spectrogram
+        data_clean = np.where(np.isnan(data), 0, data)
+        nperseg = min(int(srate * 2), len(data_clean))
+        if nperseg < 4:
+            ax = fig.add_subplot(111)
+            ax.text(0.5, 0.5, "Not enough data", ha='center', va='center',
+                    transform=ax.transAxes)
+            return
+        freqs, times_spec, Sxx = scipy_spectrogram(
+            data_clean, fs=srate, nperseg=nperseg, noverlap=nperseg // 2)
+        times_spec = times_spec + time_range[0]
+        ax = fig.add_subplot(111)
+        pcm = ax.pcolormesh(times_spec, freqs, 10 * np.log10(Sxx + 1e-12),
+                            shading='gouraud', cmap='viridis')
+        ax.set_ylim(0, min(srate / 2, 80))
+        ax.set_xlabel('Time (s)')
+        ax.set_ylabel('Frequency (Hz)')
+        ax.set_title(f'{eeg_object.name}  ·  {channel}')
+        fig.colorbar(pcm, ax=ax, label='Power (dB)')
+
 
 class ViewPSD(EEGVisualizer):
     name = "View PSD"
@@ -335,58 +426,86 @@ class ViewPSD(EEGVisualizer):
         dialogue.wait_window()
         return ret_var if ret_var else None
 
-    def _visualize(self, eeg_object, start_idx, end_idx, time_range):
-        """Compute and plot power spectral density using Welch's method."""
-        from scipy.signal import welch
+    def _visualize(self, fig, data, srate, eeg_object, channel, time_range):
+            """Compute and plot power spectral density using Welch's method."""
+            from scipy.signal import welch
 
-        ch = self.channel if self.channel else eeg_object.current_channel
-        if ch not in eeg_object.all_channel_data:
-            simple_dialogue(
-                f"Channel '{ch}' not found. "
-                f"Available: {eeg_object.all_channel_labels}")
-            return
+            # NaN-tolerant: zero out NaNs
+            data_clean = np.where(np.isnan(data), 0, data)
 
-        data = eeg_object.all_channel_data[ch][start_idx:end_idx + 1]
-        srate = eeg_object.srate
+            nperseg = min(int(srate * 2), len(data_clean))
+            if nperseg < 4:
+                ax = fig.add_subplot(111)
+                ax.text(0.5, 0.5, "Not enough data to compute PSD",
+                        ha='center', va='center', transform=ax.transAxes, fontsize=12)
+                return
 
-        # NaN-tolerant: zero out NaNs so FFT doesn't propagate them
-        data_clean = np.where(np.isnan(data), 0, data)
+            noverlap = nperseg // 2
+            freqs, pxx = welch(data_clean, fs=srate,
+                            nperseg=nperseg, noverlap=noverlap)
 
-        nperseg = min(int(srate * 2), len(data_clean))
-        if nperseg < 4:
-            simple_dialogue(
-                "Not enough data in the selected range to compute a PSD.")
-            return
+            pxx_db = 10 * np.log10(pxx + 1e-12)
 
-        noverlap = nperseg // 2
-        freqs, pxx = welch(data_clean, fs=srate,
-                           nperseg=nperseg, noverlap=noverlap)
+            max_freq = min(srate / 2, 80)
+            freq_mask = freqs <= max_freq
+            freqs = freqs[freq_mask]
+            pxx_db = pxx_db[freq_mask]
 
-        # Convert to dB
-        pxx_db = 10 * np.log10(pxx + 1e-12)
+            # --- Standard EEG bands ---
+            bands = [
+                ('δ', 0.5, 4,   '#B39DDB'),
+                ('θ', 4,   8,   '#81D4FA'),
+                ('α', 8,   13,  '#A5D6A7'),
+                ('β', 13,  30,  '#FFE082'),
+                ('γ', 30,  80,  '#EF9A9A'),
+            ]
 
-        # Cap at a reasonable EEG frequency
-        max_freq = min(srate / 2, 80)
-        freq_mask = freqs <= max_freq
-        freqs = freqs[freq_mask]
-        pxx_db = pxx_db[freq_mask]
+            ax = fig.add_subplot(111)
 
-        fig, ax = plt.subplots(figsize=self.figsize)
-        ax.plot(freqs, pxx_db, linewidth=0.8)
-        ax.set_xlabel('Frequency (Hz)')
-        ax.set_ylabel('Power (dB)')
-        ax.set_title(
-            f'PSD: {eeg_object.name} — Channel: {ch} '
-            f'({time_range[0]:.1f}–{time_range[1]:.1f} s)')
-        ax.grid(True)
+            # Band shading first (behind the line)
+            for band_name, f_lo, f_hi, color in bands:
+                f_lo_c = max(f_lo, freqs[0])
+                f_hi_c = min(f_hi, freqs[-1])
+                if f_lo_c >= f_hi_c:
+                    continue
+                ax.axvspan(f_lo_c, f_hi_c, alpha=0.18, color=color, zorder=0)
 
-        if self.save_path is not None:
-            save_full = (Path(self.save_path)
-                         / f"{eeg_object.name}_{ch}_psd{self.ext}")
-            fig.savefig(save_full, dpi=self.dpi, bbox_inches='tight')
-            print(f"PSD saved to {save_full}")
+            # Main PSD line and fill
+            ax.plot(freqs, pxx_db, linewidth=1.4, color='#1565C0', zorder=2)
+            ax.fill_between(freqs, pxx_db, pxx_db.min(),
+                            alpha=0.10, color='#1565C0', zorder=1)
 
-        if self.display == 1:
-            plt.show()
-        else:
-            plt.close(fig)
+            # Band labels along the top
+            y_top = ax.get_ylim()[1]
+            for band_name, f_lo, f_hi, color in bands:
+                f_lo_c = max(f_lo, freqs[0])
+                f_hi_c = min(f_hi, freqs[-1])
+                if f_lo_c >= f_hi_c:
+                    continue
+                mid = (f_lo_c + f_hi_c) / 2
+                ax.annotate(band_name, xy=(mid, y_top), xytext=(mid, y_top),
+                            fontsize=10, fontstyle='italic', fontweight='bold',
+                            color='#444444', ha='center', va='bottom')
+
+            # Axes
+            ax.set_xlabel('Frequency (Hz)', fontsize=11, labelpad=8)
+            ax.set_ylabel('Power Spectral Density (dB/Hz)', fontsize=11, labelpad=8)
+            ax.set_title(
+                f'{eeg_object.name}  ·  {channel}  ·  '
+                f'{time_range[0]:.1f}–{time_range[1]:.1f} s',
+                fontsize=13, fontweight='bold', pad=14)
+            ax.set_xlim(freqs[0], freqs[-1])
+
+            # Grid
+            ax.grid(True, which='major', linestyle='-', alpha=0.25, color='#888888')
+            ax.grid(True, which='minor', linestyle=':', alpha=0.12, color='#AAAAAA')
+            ax.minorticks_on()
+            ax.tick_params(labelsize=9, direction='out')
+
+            # Spine styling
+            for spine in ['top', 'right']:
+                ax.spines[spine].set_visible(False)
+            for spine in ['bottom', 'left']:
+                ax.spines[spine].set_color('#CCCCCC')
+
+            ax.set_facecolor('#FAFAFA')
