@@ -36,6 +36,8 @@ class PlaygroundMode(Mode):
         self.min_clean_time = None #Minimum length of consecutive clean data needed to allow for processing (EEGFunctions or EEGAnalyzers)
         self.has_unsaved_changes = False #True when the signal has been changed but user hasn't saved
         self.view_timeseries = [] #List of TimeSeries to view
+        self.show_ts_points = False    # Show scatter points on TimeSeries plots
+        self.show_ts_windows = False   # Show window spans on TimeSeries plots
 
         #Initialize GUI variables (these will be created in initialize_ui())
         self.canvas = None
@@ -85,6 +87,9 @@ class PlaygroundMode(Mode):
             view_menu.add_command(label="View flags", command=self.view_flags_cmd)
             view_menu.add_command(label="Select flags", command=self.select_flags_cmd)
             view_menu.add_command(label="View signal data", command=self.view_signal_info_cmd)
+            view_menu.add_separator()
+            view_menu.add_command(label="Toggle data points", command=self.toggle_ts_points_cmd)
+            view_menu.add_command(label="Toggle analysis windows", command=self.toggle_ts_windows_cmd)
 
     def show(self):
         self._create_menubar()
@@ -99,6 +104,22 @@ class PlaygroundMode(Mode):
             self._update_display(time_series)
 
     #Utility functions ------------------
+    def toggle_ts_points_cmd(self):
+        """Toggle visibility of individual data points on TimeSeries plots."""
+        self.show_ts_points = not self.show_ts_points
+        state = "ON" if self.show_ts_points else "OFF"
+        print(f"TimeSeries data points: {state}")
+        if self.current_signal is not None and len(self.view_timeseries) > 0:
+            self.update_display(time_series=self.view_timeseries)
+
+    def toggle_ts_windows_cmd(self):
+        """Toggle visibility of analysis window spans on TimeSeries plots."""
+        self.show_ts_windows = not self.show_ts_windows
+        state = "ON" if self.show_ts_windows else "OFF"
+        print(f"TimeSeries analysis windows: {state}")
+        if self.current_signal is not None and len(self.view_timeseries) > 0:
+            self.update_display(time_series=self.view_timeseries)
+    
     def visualize_signal_cmd(self):
         """Open a visualizer selection dialogue, collect params, and run."""
         if self.current_signal is None:
@@ -649,13 +670,29 @@ class PlaygroundMode(Mode):
         fxn, lims = self.get_functions()
         self.current_signal = fxn.apply(self.current_signal, time_range=lims, flags_bool=True, min_clean_length=self.min_clean_time)
         self.current_signal.log_text(f"Applied function {fxn.name} with specs {fxn.args_dict} on time range {lims[0]:.3f}-{lims[1]:.3f} sec.")
+        
         #Now, we need to re-run all our analyses on the new data
-        analyzers = eeg_analyzers.AllAnalyzers._analyzers
-        for analyzer in analyzers:
-            if analyzer.name in [ts.name for ts in self.current_signal.time_series]:
-                self.analyze_signal_cmd(analyzer_choice=analyzer) #Deletes old time series and recalculates on new signal
+        existing_analyzers = []
+        for ts in self.current_signal.time_series:
+            if ts.function is not None:
+                existing_analyzers.append(ts.function)
 
-        self.update_display()
+        # Clear all old TimeSeries — they were computed on the pre-function data
+        self.current_signal.time_series = []
+
+        # Recalculate clean segments for the new data
+        clean_segments = None
+        if self.min_clean_time is not None and self.min_clean_time > 0:
+            from eeg_theme_park.utils.pipeline import find_clean_segments
+            clean_segments = {}
+            for ch_name in self.current_signal.all_channel_labels:
+                ch_data = self.current_signal.all_channel_data[ch_name]
+                clean_segments[ch_name] = find_clean_segments(
+                    ch_data, self.current_signal.srate, self.min_clean_time)
+
+        # Re-apply each analyzer with its original parameters
+        for analyzer_inst in existing_analyzers:
+            analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)
     
     def analyze_signal_cmd(self, analyzer_choice = None):
         if self.current_signal is None:
@@ -1319,10 +1356,36 @@ class PlaygroundMode(Mode):
             # Use different color for each time series
             color = f'C{idx}'  # matplotlib color cycle (C0, C1, C2, etc.)
             axes[idx].plot(ts_plot_times, ts_plot_values, color=color, linewidth=0.5)
-            
-            # Use different color for each time series
-            color = f'C{idx}'  # matplotlib color cycle (C0, C1, C2, etc.)
-            axes[idx].plot(ts_plot_times, ts_plot_values, color=color, linewidth=0.5)
+            # Overlay individual data points if toggled on
+            if self.show_ts_points:
+                # Use un-downsampled, un-NaN-gapped data for accurate points
+                if len(self.display_time_lims) == 0:
+                    pt_times = np.asarray(ts.times)
+                    pt_values = np.asarray(ts.values)
+                else:
+                    pt_mask = (np.asarray(ts.times) >= self.display_time_lims[0]) & \
+                              (np.asarray(ts.times) <= self.display_time_lims[1])
+                    pt_times = np.asarray(ts.times)[pt_mask]
+                    pt_values = np.asarray(ts.values)[pt_mask]
+                axes[idx].scatter(pt_times, pt_values, color=color, s=12,
+                                  zorder=3, edgecolors='white', linewidths=0.3)
+
+            # Overlay window spans if toggled on and analyzer info is available
+            if self.show_ts_windows and ts.function is not None:
+                if hasattr(ts.function, 'time_details') and 'window_length' in ts.function.time_details:
+                    half_win = ts.function.time_details["window_length"] / 2
+                    if len(self.display_time_lims) == 0:
+                        win_times = np.asarray(ts.times)
+                        win_values = np.asarray(ts.values)
+                    else:
+                        win_mask = (np.asarray(ts.times) >= self.display_time_lims[0]) & \
+                                   (np.asarray(ts.times) <= self.display_time_lims[1])
+                        win_times = np.asarray(ts.times)[win_mask]
+                        win_values = np.asarray(ts.values)[win_mask]
+                    for t, v in zip(win_times, win_values):
+                        axes[idx].plot([t - half_win, t + half_win], [v, v],
+                                       color=color, alpha=0.3, linewidth=2.0,
+                                       solid_capstyle='round')
             # Set y-axis label with units if available
             ylabel = f"{ts.print_name} ({ts.units})" if hasattr(ts, 'units') and ts.units else ts.name
             axes[idx].set_ylabel(ylabel)

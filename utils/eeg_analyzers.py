@@ -97,7 +97,8 @@ class EEGAnalyzer(ABC):
                 window_signal = analyze_data[start_i:end_i]
                 if np.any(np.isnan(window_signal)):
                     continue
-                yield start_i, end_i, window_signal, analyze_times[start_i]
+                mid_i = start_i + n_window_samples // 2
+                yield start_i, end_i, window_signal, analyze_times[mid_i]
         else:
             for seg_start, seg_end in clean_segments:
                 for start_i in range(seg_start, seg_end - n_window_samples + 1, n_step_samples):
@@ -107,7 +108,8 @@ class EEGAnalyzer(ABC):
                     window_signal = analyze_data[start_i:end_i]
                     if np.any(np.isnan(window_signal)):
                         continue
-                    yield start_i, end_i, window_signal, analyze_times[start_i]
+                mid_i = start_i + n_window_samples // 2
+                yield start_i, end_i, window_signal, analyze_times[mid_i]
 
 
 class AllAnalyzers:
