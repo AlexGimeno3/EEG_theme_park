@@ -976,6 +976,33 @@ class PlaygroundMode(Mode):
                             command=on_scale_change)
         end_scale.pack(pady=5)
 
+        # Checkbox to snap sliders to current display time limits
+        def on_use_display_lims_toggle():
+            """Snap sliders and entries to display_time_lims when checked"""
+            if use_display_lims_var.get() and len(self.display_time_lims) == 2:
+                updating['flag'] = True
+                try:
+                    start_scale_var.set(self.display_time_lims[0])
+                    end_scale_var.set(self.display_time_lims[1])
+                    start_time_var.set(f"{self.display_time_lims[0]:.3f}")
+                    end_time_var.set(f"{self.display_time_lims[1]:.3f}")
+                finally:
+                    updating['flag'] = False
+                check_can_submit()
+
+        use_display_lims_var = tk.BooleanVar(value=False)
+        display_lims_cb = ttk.Checkbutton(
+            scale_frame,
+            text="Use current display time limits",
+            variable=use_display_lims_var,
+            command=on_use_display_lims_toggle
+        )
+        # Only show the checkbox if display_time_lims are set and differ from full range
+        if (len(self.display_time_lims) == 2 and
+            (self.display_time_lims[0] != self.current_signal.start_time or
+             self.display_time_lims[1] != self.current_signal.end_time)):
+            display_lims_cb.pack(pady=5)
+
         slider = None
 
         # Entry boxes for precise time specification
@@ -1181,7 +1208,7 @@ class PlaygroundMode(Mode):
         # Plot EEG signal on first axis
         axes[0].plot(plot_times, plot_data, linewidth=0.5)
         axes[0].set_ylabel('Amplitude (uV)')
-        axes[0].set_title(f'EEG Signal: {self.current_signal.name}')
+        axes[0].set_title(f'EEG Signal: {self.current_signal.name} - {self.current_signal.current_channel}')
         axes[0].grid(True)
         axes[0].set_xlim(global_min_time, global_max_time)
         
