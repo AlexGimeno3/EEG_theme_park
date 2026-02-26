@@ -10,7 +10,7 @@ from pathlib import Path
 import copy
 import numpy as np
 from eeg_theme_park.modes.mode_manager import Mode, ModeManager
-from eeg_theme_park.utils import eeg_analyzers, signal_functions, gui_utilities
+from eeg_theme_park.utils import eeg_analyzers, signal_functions, eeg_visualizers, gui_utilities
 from eeg_theme_park.utils.gui_utilities import choose_channel
 
 class PlaygroundMode(Mode):
@@ -73,6 +73,7 @@ class PlaygroundMode(Mode):
             self._menubar.add_cascade(label="Signal", menu=signal_menu)
             signal_menu.add_command(label="Switch channel", command=self.switch_channel_cmd)
             signal_menu.add_command(label="Remove channels", command=self.remove_channels_cmd)
+            signal_menu.add_command(label="Visualize signal", command=self.visualize_signal_cmd)
             signal_menu.add_command(label="Alter signal", command=self.alter_signal_cmd)
             signal_menu.add_command(label="Extract feature", command=self.analyze_signal_cmd)
             
@@ -98,6 +99,84 @@ class PlaygroundMode(Mode):
             self._update_display(time_series)
 
     #Utility functions ------------------
+    def visualize_signal_cmd(self):
+        """Open a visualizer selection dialogue, collect params, and run."""
+        if self.current_signal is None:
+            gui_utilities.simple_dialogue(
+                "You need to build or import a signal before you can visualize it.")
+            return
+
+        visualizers = eeg_visualizers.AllVisualizers._visualizers
+        if len(visualizers) == 0:
+            gui_utilities.simple_dialogue("No visualizers are available.")
+            return
+
+        names = [v.name for v in visualizers]
+
+        # --- Selection dialogue ---
+        ret_var = {'viz': None}
+
+        dialogue = tk.Toplevel(self)
+        dialogue.title("Select Visualizer")
+        dialogue.geometry("400x400")
+        dialogue.grab_set()
+        dialogue.lift()
+        dialogue.focus_force()
+
+        ttk.Label(dialogue, text="Choose a visualization:").pack(pady=10)
+
+        list_frame = ttk.Frame(dialogue, height=150)
+        list_frame.pack(fill=tk.X, expand=False, padx=10, pady=10)
+        list_frame.pack_propagate(False)
+
+        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set,
+                             selectmode=tk.SINGLE)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=listbox.yview)
+
+        for n in names:
+            listbox.insert(tk.END, n)
+
+        def check_can_submit(*args):
+            submit_button.config(
+                state='normal' if listbox.curselection() else 'disabled')
+
+        listbox.bind('<<ListboxSelect>>', check_can_submit)
+
+        def submit():
+            selection = listbox.curselection()
+            if selection:
+                ret_var['viz'] = visualizers[selection[0]]
+            dialogue.destroy()
+
+        submit_button = ttk.Button(dialogue, text="Select", command=submit,
+                                   state='disabled')
+        submit_button.pack(pady=20)
+
+        dialogue.wait_window()
+
+        viz_class = ret_var['viz']
+        if viz_class is None:
+            return
+
+        # Collect params
+        params = viz_class.get_params(eeg_object=self.current_signal, parent=self)
+        if params is None:
+            return
+        viz_inst = viz_class(**params)
+
+        # Determine time range from display_time_lims
+        if len(self.display_time_lims) == 2:
+            time_range = list(self.display_time_lims)
+        else:
+            time_range = None
+
+        viz_inst.apply(self.current_signal, time_range=time_range)
+        # Deliberately no self.update_display() — the visualization is its own window
+    
     def remove_channels_cmd(self):
         """Allow the user to permanently remove channels from the current signal."""
         if self.current_signal is None:

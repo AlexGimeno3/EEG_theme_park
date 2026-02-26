@@ -1,5 +1,6 @@
 from eeg_theme_park.utils.eeg_analyzers import EEGAnalyzer
 from eeg_theme_park.utils.signal_functions import EEGFunction
+from eeg_theme_park.utils.eeg_visualizers import EEGVisualizer
 import pandas as pd
 import copy
 from scipy.stats import theilslopes, kendalltau
@@ -207,6 +208,13 @@ class Pipeline:
                 
                 if not self.ever_run:
                     self.pipeline_log += f"\nApplied analyzer {analyzer.name} with specs {analyzer.args_dict}"
+        
+            # Step 4: Run all EEGVisualizers
+            visualizers = [op for op in self.operations if isinstance(op, EEGVisualizer)]
+            for viz in visualizers:
+                eeg_signal = viz.apply(eeg_signal, time_range=None)
+                if not self.ever_run:
+                    self.pipeline_log += f"\nRan visualizer {viz.name} with specs {viz.args_dict}"
         
         except Exception as e:
             error_message = f"Error processing {id}: {str(e)}"

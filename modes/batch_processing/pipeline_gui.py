@@ -2,7 +2,7 @@
 File that handles creating the GUI for building a Pipeline object.
 """
 
-from eeg_theme_park.utils import gui_utilities, eeg_analyzers, signal_functions, pipeline
+from eeg_theme_park.utils import gui_utilities, eeg_analyzers, signal_functions, pipeline, eeg_visualizers
 import copy
 import tkinter as tk
 from tkinter import ttk
@@ -34,7 +34,7 @@ def build_pipeline(available_channels=None):
         gui_utilities.simple_dialogue("Invalid minimum time value. Please enter a number.")
         return None
     
-    # Get all functions and analyzers
+    # Get all functions, analyzers, and visualizers
     all_functions = copy.deepcopy(signal_functions.AllFunctions._functions)
     fxn_names = [fxn.name for fxn in all_functions]
     if not len(fxn_names) == len(set(fxn_names)):
@@ -45,10 +45,16 @@ def build_pipeline(available_channels=None):
     if not len(analyzer_names) == len(set(analyzer_names)):
         raise ValueError(f"Some of your analyzers in eeg_analyzers.py have identical names. This will break the pipeline building. Please change the analyzer names before proceeding. Specifically, the analyzer names you have are {analyzer_names}.")
     
+    all_visualizers = copy.deepcopy(eeg_visualizers.AllVisualizers._visualizers)
+    visualizer_names = [v.name for v in all_visualizers]
+    if not len(visualizer_names) == len(set(visualizer_names)):
+        raise ValueError(f"Some of your visualizers in eeg_visualizers.py have identical names. This will break the pipeline building. Please change the visualizer names before proceeding. Specifically, the visualizer names you have are {visualizer_names}.")
+    
     # Create dictionaries for easy lookup
     fxn_dict = {fxn.name: fxn for fxn in all_functions}
     analyzer_dict = {analyzer.name: analyzer for analyzer in all_analyzers}
-    full_dict = {**fxn_dict, **analyzer_dict}
+    visualizer_dict = {v.name: v for v in all_visualizers}
+    full_dict = {**fxn_dict, **analyzer_dict, **visualizer_dict}
     
     # Data structure to hold current pipeline
     cp_entries = []  # List of [name, instance] pairs
@@ -78,6 +84,8 @@ def build_pipeline(available_channels=None):
     main_frame.columnconfigure(2, weight=1)
     main_frame.columnconfigure(3, weight=0)
     main_frame.columnconfigure(4, weight=1)
+    main_frame.columnconfigure(5, weight=0)
+    main_frame.columnconfigure(6, weight=1)
     main_frame.rowconfigure(1, weight=1)
     
     # --- Current Pipeline (CP) Section ---
@@ -146,6 +154,25 @@ def build_pipeline(available_channels=None):
     for name in analyzer_names:
         as_listbox.insert(tk.END, name)
     
+    # --- Visualize Signal (VS) Section ---
+    vs_label = ttk.Label(main_frame, text="Visualize Signal (VS)",
+                         font=('TkDefaultFont', 9, 'bold'))
+    vs_label.grid(row=0, column=6, pady=5)
+
+    vs_frame = ttk.Frame(main_frame)
+    vs_frame.grid(row=1, column=6, sticky='nsew', padx=5)
+
+    vs_scrollbar = ttk.Scrollbar(vs_frame)
+    vs_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    vs_listbox = tk.Listbox(vs_frame, yscrollcommand=vs_scrollbar.set,
+                            selectmode=tk.SINGLE)
+    vs_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    vs_scrollbar.config(command=vs_listbox.yview)
+
+    for vname in visualizer_names:
+        vs_listbox.insert(tk.END, vname)
+    
     # --- Button Functions ---
     
     def add_to_pipeline():
@@ -196,6 +223,29 @@ def build_pipeline(available_channels=None):
             
             cp_entries.append([name, instance])
             cp_listbox.insert(tk.END, instance.display_name if hasattr(instance, 'display_name') else name)
+        
+        #Handles visualizers
+        elif vs_listbox.curselection():
+            idx = vs_listbox.curselection()[0]
+            name = vs_listbox.get(idx)
+            viz_class = visualizer_dict[name]
+
+            if available_channels is not None and len(available_channels) > 0:
+                class _ChannelProxy:
+                    pass
+                proxy = _ChannelProxy()
+                proxy.all_channel_labels = available_channels
+                proxy.current_channel = available_channels[0]
+                params = viz_class.get_params(eeg_object=proxy, parent=window)
+            else:
+                params = viz_class.get_params(eeg_object=None, parent=window)
+
+            if params is None:
+                return
+            instance = viz_class(**params)
+            cp_entries.append([name, instance])
+            cp_listbox.insert(tk.END, name)
+        
         else:
             gui_utilities.simple_dialogue("Please select an item from Transform Signal or Analyze Signal first.")
     
@@ -221,15 +271,16 @@ def build_pipeline(available_channels=None):
             if not should_continue:
                 return
         
-        # Validate that no EEGFunction comes after an EEGAnalyzer
-        seen_analyzer = False
+        # Validate that no EEGFunction comes after an EEGAnalyzer or EEGVisualizer
+        seen_analyzer_or_viz = False
         for name, instance in cp_entries:
-            # Check if this is an analyzer
-            if name in analyzer_dict:
-                seen_analyzer = True
-            # Check if this is a function but we've already seen an analyzer
-            elif name in fxn_dict and seen_analyzer:
-                gui_utilities.simple_dialogue("Invalid pipeline: Transform Signal functions cannot come after Analyze Signal analyzers. Please reorder your pipeline.")
+            if name in analyzer_dict or name in visualizer_dict:
+                seen_analyzer_or_viz = True
+            elif name in fxn_dict and seen_analyzer_or_viz:
+                gui_utilities.simple_dialogue(
+                    "Invalid pipeline: Transform Signal functions cannot come "
+                    "after Analyze Signal or Visualize Signal operations. "
+                    "Please reorder your pipeline.")
                 return
         
         # Extract just the instances (not names) from cp_entries
