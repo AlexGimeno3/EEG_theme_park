@@ -125,7 +125,7 @@ class EEGThemeParkLoader(EEGLoader):
 
 class EDFLoader(EEGLoader):
     global sourcers 
-    sourcers = ["detti", "wrlab"]
+    sourcers = []
     
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
         """
