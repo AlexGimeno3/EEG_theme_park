@@ -91,6 +91,10 @@ class EEGAnalyzer(ABC):
         """
         Generator yielding (start_i, end_i, window_signal, timestamp) for each valid window.
         """
+        print(f"[Info from _iterate_windows in eeg_analyzers.py] data_len={len(analyze_data)}, "
+            f"n_window={n_window_samples}, n_step={n_step_samples}, "
+            f"clean_segments type={type(clean_segments)}, "
+            f"clean_segments={'None' if clean_segments is None else f'len={len(clean_segments)}, segments={clean_segments[:5]}'}")
         if clean_segments is None:
             for start_i in range(0, len(analyze_data) - n_window_samples + 1, n_step_samples):
                 end_i = start_i + n_window_samples
