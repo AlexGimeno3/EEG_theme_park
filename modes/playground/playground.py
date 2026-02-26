@@ -693,6 +693,8 @@ class PlaygroundMode(Mode):
         # Re-apply each analyzer with its original parameters
         for analyzer_inst in existing_analyzers:
             analyzer_inst.apply(self.current_signal, clean_segments=clean_segments)
+        
+        self.update_display()
     
     def analyze_signal_cmd(self, analyzer_choice = None):
         if self.current_signal is None:

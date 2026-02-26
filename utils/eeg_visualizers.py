@@ -441,8 +441,7 @@ class ViewPSD(EEGVisualizer):
                 return
 
             noverlap = nperseg // 2
-            freqs, pxx = welch(data_clean, fs=srate,
-                            nperseg=nperseg, noverlap=noverlap)
+            freqs, pxx = welch(data_clean, fs=srate, nperseg=nperseg, noverlap=noverlap)
 
             pxx_db = 10 * np.log10(pxx + 1e-12)
 
@@ -453,7 +452,7 @@ class ViewPSD(EEGVisualizer):
 
             # --- Standard EEG bands ---
             bands = [
-                ('δ', 0.5, 4,   '#B39DDB'),
+                ('δ', 1, 4,   '#B39DDB'),
                 ('θ', 4,   8,   '#81D4FA'),
                 ('α', 8,   13,  '#A5D6A7'),
                 ('β', 13,  30,  '#FFE082'),
@@ -474,6 +473,12 @@ class ViewPSD(EEGVisualizer):
             ax.plot(freqs, pxx_db, linewidth=1.4, color='#1565C0', zorder=2)
             ax.fill_between(freqs, pxx_db, pxx_db.min(),
                             alpha=0.10, color='#1565C0', zorder=1)
+
+            # Black dashed line at 40 Hz
+            ax.axvline(x=40, color='black', linestyle='--', linewidth=1.2, zorder=3)
+
+            # Set fixed y-axis limits
+            ax.set_ylim(-30, 45)
 
             # Band labels along the top
             y_top = ax.get_ylim()[1]
