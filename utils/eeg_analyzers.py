@@ -474,6 +474,7 @@ class MultiChannelAnalyzer(EEGAnalyzer):
             # Multi-channel analyzers produce a single TimeSeries, no channel_data
         }
 
+        print(f"[DEBUG MCA] ts_values length after _iterate_windows: {len(ts_values)}")
         new_ts = TimeSeries(**params_dict)
         eeg_object.time_series.append(new_ts)
         return eeg_object

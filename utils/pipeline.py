@@ -126,6 +126,7 @@ class Pipeline:
             functions = [op for op in self.operations if isinstance(op, EEGFunction)]
             analyzers = [op for op in self.operations if isinstance(op, EEGAnalyzer)]
 
+            print(f"[DEBUG run_pipeline] Time series on signal BEFORE processing: {[ts.name for ts in eeg_signal.time_series]}")
             # Step 1: Apply all EEGFunctions. NB: the apply subclass forces the minimum length with each consecutive function.
             for func in functions:
                 eeg_signal = func.apply(eeg_signal, time_range=None, min_clean_length=self.min_clean_length)
@@ -179,6 +180,10 @@ class Pipeline:
             for analyzer in analyzers:
                 eeg_signal = analyzer.apply(eeg_signal, clean_segments=clean_segments)
                 
+                print(f"[DEBUG run_pipeline] Number of time_series on signal: {len(eeg_signal.time_series)}")
+                print(f"[DEBUG run_pipeline] Time series names: {[ts.name for ts in eeg_signal.time_series]}")
+                print(f"[DEBUG run_pipeline] Last TS name: {eeg_signal.time_series[-1].name}, length: {len(eeg_signal.time_series[-1].values)}")
+
                 my_ts_data = np.array(eeg_signal.time_series[-1].values)
                 my_ts_times = np.array(eeg_signal.time_series[-1].times)
                 
