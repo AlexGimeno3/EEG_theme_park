@@ -245,7 +245,7 @@ class EEGLABLoader(EEGLoader):
             channel_names = raw.ch_names
             all_channel_data = {}
             for i, ch_name in enumerate(channel_names):
-                all_channel_data[ch_name] = raw.get_data(picks=[i])[0]
+                all_channel_data[ch_name] = raw.get_data(picks=[i])[0] * 1e6
         
         srate = info['sfreq']
         
@@ -268,20 +268,21 @@ class EEGLABLoader(EEGLoader):
         # Extract events/annotations as flags
         flags = {}
         if is_epoched:
-            epoch_data = epochs.get_data()
-            n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
-            tmin_samples = int(round(epochs.tmin * srate))
-            epoch_starts = epochs.events[:, 0] + tmin_samples
-            offset = epoch_starts[0]
-
-            id_to_label = {v: k for k, v in epochs.event_id.items()}
-            flags = {}
-            for i in range(n_epochs):
-                int_code = epochs.events[i, 2]
-                label = id_to_label.get(int_code, str(int_code))
-                event_sample = i * n_times_per_epoch  # since epochs are just concatenated sequentially
-                flags[f"{label}_epoch{i}"] = [event_sample / srate]
             annotations = None
+            # epoch_data = epochs.get_data()
+            # n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
+            # tmin_samples = int(round(epochs.tmin * srate))
+            # epoch_starts = epochs.events[:, 0] + tmin_samples
+            # offset = epoch_starts[0]
+
+            # id_to_label = {v: k for k, v in epochs.event_id.items()}
+            # flags = {}
+            # for i in range(n_epochs):
+            #     int_code = epochs.events[i, 2]
+            #     label = id_to_label.get(int_code, str(int_code))
+            #     event_sample = i * n_times_per_epoch  # since epochs are just concatenated sequentially
+            #     flags[f"{label}_epoch{i}"] = [event_sample / srate]
+            # annotations = None
         else:
             annotations = raw.annotations
         if annotations is not None and len(annotations) > 0:
