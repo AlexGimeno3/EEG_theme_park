@@ -214,14 +214,31 @@ class EEGLABLoader(EEGLoader):
             is_epoched = True
         
         if is_epoched:
-            print("Note: code uses blind concatenation! DO NOT use any event handling in batch processing mode!")
             info = epochs.info
             channel_names = epochs.ch_names
-            epoch_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
-            concatenated = np.concatenate(epoch_data, axis=-1)  # (n_channels, n_total_samples)
+            epoch_data = epochs.get_data()  # (n_epochs, n_channels, n_times)
+            n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
+            srate = info['sfreq']
+
+            # epochs.events[:, 0] gives the sample index of the event in the original recording.
+            # tmin (usually negative) tells us how many samples before the event each epoch starts.
+            tmin_samples = int(round(epochs.tmin * srate))
+            epoch_starts = epochs.events[:, 0] + tmin_samples  # absolute sample index of each epoch's first sample
+
+            # Total length spans from the start of the first epoch to the end of the last
+            total_samples = (epoch_starts[-1] + n_times_per_epoch) - epoch_starts[0]
+
+            # Build a NaN-filled canvas and slot each epoch into its true position
+            full_data = np.full((n_channels, total_samples), np.nan)
+            offset = epoch_starts[0]  # so the first epoch starts at index 0
+            for i in range(n_epochs):
+                start_idx = epoch_starts[i] - offset
+                full_data[:, start_idx:start_idx + n_times_per_epoch] = epoch_data[i]
+
             all_channel_data = {}
             for i, ch_name in enumerate(channel_names):
-                all_channel_data[ch_name] = concatenated[i]
+                all_channel_data[ch_name] = full_data[i] * 1e6
+
                 
         else:
             info = raw.info
@@ -251,8 +268,12 @@ class EEGLABLoader(EEGLoader):
         # Extract events/annotations as flags
         flags = {}
         if is_epoched:
-            n_epochs = epochs.get_data().shape[0]
-            n_times_per_epoch = epochs.get_data().shape[2]
+            epoch_data = epochs.get_data()
+            n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
+            tmin_samples = int(round(epochs.tmin * srate))
+            epoch_starts = epochs.events[:, 0] + tmin_samples
+            offset = epoch_starts[0]
+
             id_to_label = {v: k for k, v in epochs.event_id.items()}
             flags = {}
             for i in range(n_epochs):
