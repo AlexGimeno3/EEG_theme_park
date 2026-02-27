@@ -478,7 +478,7 @@ class ViewPSD(EEGVisualizer):
             ax.axvline(x=40, color='black', linestyle='--', linewidth=1.2, zorder=3)
 
             # Set fixed y-axis limits
-            ax.set_ylim(-30, 45)
+            ax.set_ylim(-60, 45)
 
             # Band labels along the top
             y_top = ax.get_ylim()[1]
