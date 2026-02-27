@@ -218,9 +218,18 @@ class EEGLABLoader(EEGLoader):
         if is_epoched:
             info = epochs.info
             channel_names = epochs.ch_names
-            # Concatenate epochs: (n_epochs, n_channels, n_times) -> (n_channels, n_total_samples)
+            # Concatenate epochs with NaN separators to preserve discontinuities
             epoch_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
-            concatenated = np.concatenate(epoch_data, axis=-1)  # (n_channels, n_total_samples)
+            n_epochs, n_channels_ep, n_times_per_epoch = epoch_data.shape
+            nan_separator = np.full((n_channels_ep, 1), np.nan)  # single NaN sample per channel
+            
+            epoch_pieces = []
+            for i in range(n_epochs):
+                epoch_pieces.append(epoch_data[i])  # shape: (n_channels, n_times)
+                if i < n_epochs - 1:
+                    epoch_pieces.append(nan_separator)
+            
+            concatenated = np.concatenate(epoch_pieces, axis=-1)
             all_channel_data = {}
             for i, ch_name in enumerate(channel_names):
                 all_channel_data[ch_name] = concatenated[i]
