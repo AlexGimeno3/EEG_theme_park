@@ -218,21 +218,29 @@ class EEGLABLoader(EEGLoader):
         if is_epoched:
             info = epochs.info
             channel_names = epochs.ch_names
-            # Concatenate epochs with NaN separators to preserve discontinuities
             epoch_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
             n_epochs, n_channels_ep, n_times_per_epoch = epoch_data.shape
-            nan_separator = np.full((n_channels_ep, 1), np.nan)  # single NaN sample per channel
+            srate = info['sfreq']
             
-            epoch_pieces = []
+            # Use event sample indices to reconstruct the original temporal structure.
+            # epochs.events[:, 0] gives each event's sample index in the original raw recording;
+            # adding tmin_samples shifts back to the true start of each epoch window.
+            tmin_samples = int(round(epochs.tmin * srate))
+            epoch_starts = epochs.events[:, 0] + tmin_samples  # absolute sample index of each epoch's first sample
+            
+            # Total span from the first sample of the first epoch to the last sample of the last epoch
+            total_samples = (epoch_starts[-1] + n_times_per_epoch) - epoch_starts[0]
+            
+            # Build a NaN-filled array spanning the full temporal range, then drop in each epoch
+            full_data = np.full((n_channels_ep, total_samples), np.nan)
+            offset = epoch_starts[0]
             for i in range(n_epochs):
-                epoch_pieces.append(epoch_data[i])  # shape: (n_channels, n_times)
-                if i < n_epochs - 1:
-                    epoch_pieces.append(nan_separator)
+                start_idx = epoch_starts[i] - offset
+                full_data[:, start_idx:start_idx + n_times_per_epoch] = epoch_data[i]
             
-            concatenated = np.concatenate(epoch_pieces, axis=-1)
             all_channel_data = {}
             for i, ch_name in enumerate(channel_names):
-                all_channel_data[ch_name] = concatenated[i]
+                all_channel_data[ch_name] = full_data[i] * 1e6  # V -> µV
         else:
             info = raw.info
             channel_names = raw.ch_names
@@ -261,51 +269,17 @@ class EEGLABLoader(EEGLoader):
         # Extract events/annotations as flags
         flags = {}
         if is_epoched:
-            info = epochs.info
-            channel_names = epochs.ch_names
-            epoch_data = epochs.get_data()  # (n_epochs, n_channels, n_times)
-            n_epochs, n_channels, n_times_per_epoch = epoch_data.shape
-            srate = info['sfreq']
-
-            # epochs.events[:, 0] are sample indices in the original raw recording
-            # epochs.tmin is the offset (in seconds) before the event
-            tmin_samples = int(round(epochs.tmin * srate))
-            epoch_starts = epochs.events[:, 0] + tmin_samples  # absolute sample index of each epoch's first sample
-
-            # Total length: from first epoch start to end of last epoch
-            total_samples = (epoch_starts[-1] + n_times_per_epoch) - epoch_starts[0]
-
-            # Initialize with NaN and fill in epoch data at correct positions
-            full_data = np.full((n_channels, total_samples), np.nan)
-            offset = epoch_starts[0]  # baseline so first epoch starts at index 0
-            for i in range(n_epochs):
-                start_idx = epoch_starts[i] - offset
-                full_data[:, start_idx:start_idx + n_times_per_epoch] = epoch_data[i]
-
-            all_channel_data = {}
-            for i, ch_name in enumerate(channel_names):
-                all_channel_data[ch_name] = full_data[i] * 1e6
-
             # Invert event_id mapping: {int_code: "label_string"}
             id_to_label = {v: k for k, v in epochs.event_id.items()}
-
-            # Flags: mark each event at its true position and each epoch window
-            flags = {}
             
-            #Code to shade epochs; omitted, as it was cluttering up the flags view
-            # for i in range(n_epochs):
-            #     int_code = epochs.events[i, 2]
-            #     label = id_to_label.get(int_code, str(int_code))
-
-            #     # Point event at the actual event position
-            #     event_sample = epochs.events[i, 0] - offset
-            #     flags[f"{label}_epoch{i}"] = [event_sample / srate]
-
-            #     # Epoch window as a shaded range
-            #     epoch_start_sec = (epoch_starts[i] - offset) / srate
-            #     epoch_end_sec = epoch_start_sec + (n_times_per_epoch / srate)
-            #     flags[f"{label}_epoch{i}_window"] = [epoch_start_sec, epoch_end_sec, True]
-
+            # epoch_starts and offset are already computed above
+            # Add flags for each event at its true temporal position
+            for i in range(n_epochs):
+                int_code = epochs.events[i, 2]
+                label = id_to_label.get(int_code, str(int_code))
+                event_sample = epochs.events[i, 0] - offset
+                flags[f"{label}_epoch{i}"] = [event_sample / srate]
+            
             annotations = None
         else:
             annotations = raw.annotations
