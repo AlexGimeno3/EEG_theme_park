@@ -125,126 +125,7 @@ class EEGThemeParkLoader(EEGLoader):
 
 class EDFLoader(EEGLoader):
     global sourcers 
-    sourcers = ["detti", "wrlab"]
-    
-    def add_detti_flags(self, eeg_signal_obj):
-        
-        search_name = eeg_signal_obj.name
-        
-        # Find the .txt file
-        project_root = Path(__file__).parent.parent
-        txt_files = list(project_root.rglob(f"{search_name}.txt"))
-        if not txt_files:
-            return
-        if len(txt_files) > 1:
-            raise ValueError(f"Multiple .txt files found for {search_name}: {txt_files}")
-        txt_file = txt_files[0]
-        with open(txt_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Helper to parse time strings
-        def parse_time_str(time_str):
-            time_str = time_str.strip().replace('.', ':')
-            parts = time_str.split(':')
-            if len(parts) != 3:
-                raise ValueError(f"Invalid time format: {time_str}")
-            hours, minutes, seconds = map(int, parts)
-            return dt.time(hours, minutes, seconds)
-        
-        # Extract registration start time from .txt (ground truth)
-        reg_start_match = re.search(r'Registration start time:\s*([0-9:.]+)', content)
-        if not reg_start_match:
-            raise ValueError(f"Could not find registration start time in {txt_file}")
-        
-        reg_start_time = parse_time_str(reg_start_match.group(1))
-        
-        # Verify signal hasn't been cropped
-        if eeg_signal_obj.start_time != 0:
-            raise ValueError(
-                f"Signal has been cropped (start_time = {eeg_signal_obj.start_time}). "
-                f"Cannot reliably align with .txt annotations.")
-        
-        # Override datetime_collected to match .txt ground truth (use arbitrary date, timezone-naive)
-        eeg_signal_obj.datetime_collected = dt.datetime.combine(
-            dt.date(2000, 1, 1),  # Arbitrary date
-            reg_start_time
-        )
-        
-        # Verify recording is <24 hours (otherwise hours repeat and are ambiguous)
-        recording_duration_hours = len(eeg_signal_obj.data) / eeg_signal_obj.srate / 3600
-        if recording_duration_hours >= 24:
-            raise ValueError(
-                f"Recording duration ({recording_duration_hours:.2f} hours) >= 24 hours. Cannot unambiguously determine seizure dates from time-only annotations.")
-        
-        # Find all seizure blocks
-        seizure_pattern = r'Seizure n \d+.*?(?=Seizure n \d+|$)'
-        seizures = re.findall(seizure_pattern, content, re.DOTALL)
-        
-        if not seizures:
-            return  # No seizures found
-        
-        recording_start_datetime = eeg_signal_obj.datetime_collected
-        # Make timezone-naive since .txt annotations don't include timezone info
-        if recording_start_datetime.tzinfo is not None:
-            recording_start_datetime = recording_start_datetime.replace(tzinfo=None)
-        recording_start_date = recording_start_datetime.date()
-        
-        for seizure_text in seizures:
-            # Extract start time (handles both format variations)
-            start_match = re.search(
-                r'(?:Seizure start time|Start time):\s*([0-9:.]+)', 
-                seizure_text
-            )
-            end_match = re.search(
-                r'(?:Seizure end time|End time):\s*([0-9:.]+)', 
-                seizure_text
-            )
-            
-            if not start_match or not end_match:
-                raise ValueError(f"Could not extract seizure times from: {seizure_text[:150]}")
-            
-            seizure_start_time = parse_time_str(start_match.group(1))
-            seizure_end_time = parse_time_str(end_match.group(1))
-            
-            # Determine dates: if time < recording start time, must be next day
-            def time_to_datetime(time_obj):
-                if time_obj >= recording_start_datetime.time():
-                    return dt.datetime.combine(recording_start_date, time_obj)
-                else:
-                    return dt.datetime.combine(
-                        recording_start_date + dt.timedelta(days=1), 
-                        time_obj
-                    )
-            
-            seizure_start_datetime = time_to_datetime(seizure_start_time)
-            seizure_end_datetime = time_to_datetime(seizure_end_time)
-            
-            # If end <= start, end must be next day
-            if seizure_end_datetime <= seizure_start_datetime:
-                seizure_end_datetime = dt.datetime.combine(
-                    seizure_start_datetime.date() + dt.timedelta(days=1),
-                    seizure_end_time
-                )
-            
-            # Validate seizure is within recording bounds
-            recording_end_datetime = (
-                recording_start_datetime + 
-                dt.timedelta(seconds=len(eeg_signal_obj.data) / eeg_signal_obj.srate)
-            )
-            
-            if seizure_start_datetime < recording_start_datetime:
-                raise ValueError(
-                    f"Seizure start {seizure_start_datetime} before recording start {recording_start_datetime}"
-                )
-            
-            if seizure_end_datetime > recording_end_datetime:
-                raise ValueError(
-                    f"Seizure end {seizure_end_datetime} after recording end {recording_end_datetime}"
-                )
-            
-            # Add the flag with shading
-            flag_arr = [seizure_start_datetime, seizure_end_datetime]
-            eeg_signal_obj.add_flag("Seizure", flag_arr, shade=True)
+    sourcers = []
     
     def load(self, file_path: Path, **kwargs) -> EEGSignal:
         """
@@ -306,7 +187,7 @@ class EDFLoader(EEGLoader):
                 
                 eeg_signal_obj.add_flag(name, times)
             
-            if sourcer is None: #NB: sourcers are used for files where event data is NOT contained in the EDF annotations and we need special code to load them in. This is most often the case in demo files where event data are stored in strange ways (e.g., .txt files). Note that events/times stored in .xlsx files (so long as they are in the right format) can be loaded using the batch processing mode. If sourcer are left as "unspecified", the EDF will still load correctly (with its annotations stored as flags), there will just be no bespoke importation of any extra events.
+            if sourcer is None and len(sourcers)>0: #NB: sourcers are used for files where event data is NOT contained in the EDF annotations and we need special code to load them in. This is most often the case in demo files where event data are stored in strange ways (e.g., .txt files). Note that events/times stored in .xlsx files (so long as they are in the right format) can be loaded using the batch processing mode. If sourcer are left as "unspecified", the EDF will still load correctly (with its annotations stored as flags), there will just be no bespoke importation of any extra events.
                 sourcer = text_entry("Where do these files come from? Current options are 'detti' and 'wrlab'.")
                 sourcer = [sourcer if sourcer in sourcers else "unspecified"][0]
                 eeg_signal_obj.sourcer = sourcer
