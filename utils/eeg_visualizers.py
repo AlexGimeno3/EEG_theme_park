@@ -471,7 +471,7 @@ class ViewPSD(EEGVisualizer):
 
             # Main PSD line and fill
             ax.plot(freqs, pxx_db, linewidth=1.4, color='#1565C0', zorder=2)
-            ax.fill_between(freqs, pxx_db, pxx_db.min(),
+            ax.fill_between(freqs, pxx_db, -60,
                             alpha=0.10, color='#1565C0', zorder=1)
 
             # Black dashed line at 40 Hz

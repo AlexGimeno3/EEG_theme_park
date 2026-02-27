@@ -458,6 +458,67 @@ class bandpass_filter(EEGFunction):
         print("Bandpass filtering done!")
         return modified_signal
     
+class NotchFilter(EEGFunction):
+    name = "Notch filter"
+    params_units_dict = {"q_factor":"unitless", "notch_frequency":"Hz"}
+
+    def __init__(self, notch_frequency=60, q_factor=50, **kwargs):
+        """
+        Initializes the notch_filter function.
+        
+        Inputs:
+        - notch_frequency (float): frequency we would like to filter out (Hz)
+        - q_factor (float): factor describing the tightness of the band around the frequency we filter out (unitless)
+        - **kwargs: additional parameters passed to parent
+        """
+        params = {k: v for k, v in locals().items() if k not in ('self', 'kwargs', '__class__')} #Leave unchanged
+        super().__init__(**params, **kwargs) #Leave unchanged
+        self.__dict__.update(params) #Leave unchanged
+
+        #Edit quality checks
+        if self.q_factor is None:
+            raise ValueError("q_factor is required; it is currently None")
+        elif self.notch_frequency is None:
+            raise ValueError("notch_frequency is required; it is currently None")
+        elif self.notch_frequency<0:
+            raise ValueError(f"notch_frequency must be greater than 0; yours is {self.notch_frequency}")
+    
+    def notch_filter_signal(my_raw):
+    """
+    Code to create and apply a notch filter to the my_raw object of interest.
+    
+    Inputs:
+    - my_raw (alex_raw object): object whose data we want to notch filter
+
+    Outputs:
+    - my_raw (alex_raw object): returns the alex_raw object with the updated EEG_data array
+    """
+    notch_frequency = vars_dict["notch_frequency"]
+    q_factor = vars_dict["notch_q"]
+    
+    def iir_notch_filter(data, notch_freq, quality_factor, fs):
+        b, a = iirnotch(notch_freq / (fs / 2), quality_factor)
+        return filtfilt(b, a, data)
+    
+    data_init = np.copy(my_raw.EEG_data)
+    time_to_pad = 1/notch_frequency*3
+    n_to_pad = int(time_to_pad*my_raw.sampling_rate)
+    
+    for start, length in zip(my_raw.clean_runs, my_raw.clean_runs_lengths):
+        data_to_filter = my_raw.EEG_data[start:start+length]
+        data_padded = np.pad(data_to_filter, n_to_pad, mode='reflect')
+        filtered_segment = iir_notch_filter(data=data_padded, notch_freq=notch_frequency, 
+                                         quality_factor=q_factor, fs=my_raw.sampling_rate)
+        filtered_segment = filtered_segment[n_to_pad:-n_to_pad]
+        if len(data_to_filter) != len(filtered_segment):
+            raise ValueError("The length of the EEG data segment and the filtered segment should be the same.")
+        my_raw.EEG_data[start:start+length] = filtered_segment
+
+    if np.array_equal(my_raw.EEG_data, data_init):
+        raise ValueError("After notch filtering, there was no change to the data.")
+    
+    return my_raw
+
 class add_artefact(EEGFunction):
     name = "Add noise"
     params_units_dict = {"num_artefacts":"artefacts", "proportion_artefacts":"", "artefact_type":""}
