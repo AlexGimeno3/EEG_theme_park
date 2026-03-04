@@ -496,9 +496,9 @@ class ViewPSD(EEGVisualizer):
             ax.set_xlabel('Frequency (Hz)', fontsize=11, labelpad=8)
             ax.set_ylabel('Power Spectral Density (dB/Hz)', fontsize=11, labelpad=8)
             ax.set_title(
-                f'{eeg_object.name}  ·  {channel}  ·  '
-                f'{time_range[0]:.1f}–{time_range[1]:.1f} s',
-                fontsize=13, fontweight='bold', pad=14)
+                f'{eeg_object.name} ({channel}): '
+                f'{time_range[0]:.0f}–{time_range[1]:.0f} s',
+                fontsize=13, pad=14)
             ax.set_xlim(freqs[0], freqs[-1])
 
             # Grid
